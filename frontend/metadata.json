@@ -1,0 +1,8 @@
+
+{
+  "name": "LankaVibe Travels - AI-Powered Sri Lankan Adventures",
+  "description": "A premium Sri Lankan travel agency platform featuring AI-generated custom itineraries, beautiful tour packages, and seamless booking experiences.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
