@@ -51,7 +51,8 @@ jobs:
             SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
             user=${{ secrets.EMAIL_USER }}
             pass=${{ secrets.EMAIL_PASS }}
-
+            FRONTEND_URL=${{ secrets.PROD_FRONTEND_URL }}
+            
       
       # --- FRONTEND DEPLOYMENT ---
       - name: Create Frontend .env
@@ -59,7 +60,7 @@ jobs:
           echo "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" > ./frontend/.env
           echo "VITE_GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}" >> ./frontend/.env
           echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> ./frontend/.env
-          echo "VITE_BACKEND_URL=https://lankavibe-backend-qc54s-uc.a.run.app" >> ./frontend/.env
+          echo "VITE_BACKEND_URL=${{ secrets.PROD_BACKEND_URL }}" >> ./frontend/.env
 
       - name: Build and Push Frontend
         run: |
@@ -72,4 +73,4 @@ jobs:
           service: lankavibe-frontend
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/frontend:latest
           region: ${{ env.REGION }}
-          flags: '--port=80 --allow-unauthenticated' # Nginx 80න් දුවන නිසා
+          flags: '--port=80 --allow-unauthenticated'
