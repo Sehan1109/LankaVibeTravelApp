@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    image: sehan119/lankavibe-backend:latest
+    container_name: lankavibe-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    networks:
+      - app-network
+
+  frontend:
+    image: sehan119/lankavibe-frontend:latest
+    container_name: lankavibe-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
