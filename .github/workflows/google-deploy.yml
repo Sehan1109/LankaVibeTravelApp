@@ -17,13 +17,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 1. Google Cloud එකට Log වීම
+      # 1. Log in Google Cloud
       - name: Google Auth
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # 2. Docker Setup කිරීම
+      # 2. Docker Setup 
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
@@ -44,9 +44,22 @@ jobs:
           env_vars: |
             MONGO_URI=${{ secrets.MONGO_URI }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
-            # මෙතනට ඔයාගේ Backend එකට ඕන අනිත් .env විස්තර ටිකත් දාන්න (Secrets විදියට GitHub එකේ සේව් කරලා)
+            GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
+            SERPAPI_API_KEY=${{ secrets.SERPAPI_API_KEY }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+            user=${{ secrets.EMAIL_USER }}
+            pass=${{ secrets.EMAIL_PASS }}
 
+      
       # --- FRONTEND DEPLOYMENT ---
+      - name: Create Frontend .env
+        run: |
+          echo "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" > ./frontend/.env
+          echo "VITE_GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}" >> ./frontend/.env
+          echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> ./frontend/.env
+          echo "VITE_BACKEND_URL=https://lankavibe-backend-qc54s-uc.a.run.app" >> ./frontend/.env
 
       - name: Build and Push Frontend
         run: |
