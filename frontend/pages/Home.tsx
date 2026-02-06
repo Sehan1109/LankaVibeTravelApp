@@ -210,7 +210,7 @@ const Home: React.FC = () => {
               transition={{ delay: 0.2 }}
               className="absolute top-32 left-0 w-56 h-72 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white z-10"
             >
-              <img src={"../resources/img01.jpg"} className="w-full h-full object-cover" alt="Temple" />
+              <img src={"/resources/img01.jpg"} className="w-full h-full object-cover" alt="Temple" />
             </motion.div>
 
             <motion.div
@@ -219,7 +219,7 @@ const Home: React.FC = () => {
               transition={{ delay: 0.4 }}
               className="absolute top-0 left-52 w-44 h-44 rounded-[2rem] overflow-hidden shadow-xl border-4 border-white z-20"
             >
-              <img src={"../resources/img04.jpg"} className="w-full h-full object-cover" alt="Fishing" />
+              <img src={"/resources/img04.jpg"} className="w-full h-full object-cover" alt="Fishing" />
               <div className="absolute -top-4 -right-4 w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="3 11 22 2 13 21 11 13 3 11" />
@@ -233,7 +233,7 @@ const Home: React.FC = () => {
               transition={{ delay: 0.6 }}
               className="absolute top-52 left-64 w-48 h-48 rounded-[2rem] overflow-hidden shadow-xl border-4 border-white z-20"
             >
-              <img src={"../resources/img03.jpg"} className="w-full h-full object-cover" alt="Surf" />
+              <img src={"/resources/img03.jpg"} className="w-full h-full object-cover" alt="Surf" />
             </motion.div>
 
             <motion.div
@@ -251,7 +251,7 @@ const Home: React.FC = () => {
               transition={{ delay: 0.5 }}
               className="absolute top-10 right-10 w-48 h-64 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white z-10"
             >
-              <img src="../resources/img02.jpg" className="w-full h-full object-cover" alt="Colombo" />
+              <img src="/resources/img02.jpg" className="w-full h-full object-cover" alt="Colombo" />
             </motion.div>
 
             <motion.div
@@ -260,7 +260,7 @@ const Home: React.FC = () => {
               transition={{ delay: 0.7 }}
               className="absolute top-64 right-0 w-52 h-80 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white z-10"
             >
-              <img src="../resources/img05.jpg" className="w-full h-full object-cover" alt="Ella Train" />
+              <img src="/resources/img05.jpg" className="w-full h-full object-cover" alt="Ella Train" />
             </motion.div>
           </div>
         </div>
