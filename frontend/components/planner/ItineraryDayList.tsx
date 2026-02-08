@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { RefreshCw, Tag, Ticket, Car, BedDouble, DollarSign, ArrowRight } from 'lucide-react';
+import { RefreshCw, Tag, Ticket, Car, BedDouble, DollarSign, ArrowDown } from 'lucide-react';
 import ItineraryMap from '../ItineraryMap'; 
 import CostSummary from '@/components/CostSummary';
+import { generatePDF } from '../../utils/pdfGenerator';
 
 interface ItineraryDayListProps {
     itinerary: any;
@@ -12,7 +13,6 @@ interface ItineraryDayListProps {
     regeneratingDayIndex: number | null;
     setRegenerateModal: (data: { isOpen: boolean; dayIndex: number | null }) => void;
     isLoaded: boolean;
-    onBookClick: () => void;
 }
 
 // Small helper component for the Expandable Description
@@ -39,7 +39,7 @@ const ExpandableDescription = ({ text }: { text: string }) => {
 
 const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
     itinerary, input, history, currentIndex, switchVersion,
-    regeneratingDayIndex, setRegenerateModal, isLoaded, onBookClick
+    regeneratingDayIndex, setRegenerateModal, isLoaded,
 }) => {
 
     const activePlan = (history && history.length > 0 && history[currentIndex]) 
@@ -225,10 +225,10 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
 
             <div className="mt-12 text-center pb-8">
                 <button
-                    onClick={onBookClick}
+                    onClick={() => generatePDF(activePlan, input)}
                     className="w-full sm:w-auto px-10 py-5 bg-emerald-600 text-white font-black rounded-full text-lg shadow-2xl hover:bg-emerald-700 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3 mx-auto"
                 >
-                    Book This Trip With LankaVibe <ArrowRight className="w-5 h-5" />
+                    Download This Trip as a PDF <ArrowDown className="w-8 h-8 animate-bounce" />
                 </button>
             </div>
         </div>
