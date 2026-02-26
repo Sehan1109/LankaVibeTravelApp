@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Create Frontend .env
         run: |
@@ -31,13 +31,13 @@ jobs:
       - name: Build Frontend
         working-directory: ./frontend
         run: |
-          npm ci
+          npm ci || npm install --no-audit --prefer-offline
           npm run build
 
       - name: Prepare Backend (install deps)
         working-directory: ./backend
         run: |
-          npm ci --only=production || npm ci
+          npm ci --only=production || npm install --no-audit --prefer-offline
 
       - name: Start SSH agent and add key
         uses: webfactory/ssh-agent@v0.5.3
