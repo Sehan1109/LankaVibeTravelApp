@@ -10,11 +10,41 @@ interface PlannerHeaderProps {
     saveStatus: string;
     itinerary: any;
     input: any;
+    activityOverrides: Record<number, any[]>;
+    setActivityOverrides: React.Dispatch<React.SetStateAction<Record<number, any[]>>>;
+    hotelOverrides: Record<number, any>;
+    setHotelOverrides: React.Dispatch<React.SetStateAction<Record<number, any>>>;
 }
 
 const PlannerHeader: React.FC<PlannerHeaderProps> = ({ 
-    user, startNewPlan, setIsSidebarOpen, onSave, saveStatus, itinerary, input 
+    user, startNewPlan, setIsSidebarOpen, onSave, saveStatus, itinerary, input, activityOverrides, hotelOverrides 
 }) => {
+
+    // 🔥 අලුතින් එකතු කරන ලද කොටස: User විසින් වෙනස් කරන ලද දත්ත PDF එකට යැවීමට සැකසීම
+    const handleDownloadPDF = () => {
+        // Original plan එකේ Copy එකක් සාදා ගැනීම (State එක වෙනස් නොවන පරිදි)
+        const customizedPlan = JSON.parse(JSON.stringify(itinerary));
+
+        customizedPlan.days = customizedPlan.days.map((day: any, index: number) => {
+            const newDay = { ...day };
+            
+            // 1. User අලුතින් Add/Remove කරපු Activities තියෙනවද බලලා ඒවා replace කිරීම
+            if (activityOverrides && activityOverrides[index]) {
+                 newDay.activities = activityOverrides[index];
+            }
+            
+            // 2. User වෙනස් කරපු Hotels තියෙනවද බලලා ඒවා replace කිරීම 
+            // (ඔබේ component එකේ hotelOverrides state එකක් ඇතැයි උපකල්පනය කරමි)
+            if (typeof hotelOverrides !== 'undefined' && hotelOverrides[index]) {
+                 newDay.accommodation = hotelOverrides[index];
+            }
+
+            return newDay;
+        });
+
+        // අලුත් කරපු Plan එක PDF generator එකට යැවීම
+        generatePDF(customizedPlan, input);
+    };
 
     // LOGIC FIX: A plan is considered "Saved" if the save action completed 
     const isSaved = saveStatus === 'saved' || (itinerary && itinerary._id);
@@ -61,7 +91,7 @@ const PlannerHeader: React.FC<PlannerHeaderProps> = ({
 
                         {/* PDF DOWNLOAD BUTTON */}
                         <button
-                            onClick={() => generatePDF(itinerary, input)}
+                            onClick={handleDownloadPDF}
                             className="flex items-center justify-center gap-2 px-3 md:px-5 py-2.5 bg-white border border-gray-200 text-gray-700 text-xs md:text-sm font-bold rounded-xl hover:bg-gray-50 transition-colors w-full md:w-auto"
                         >
                             <Download className="w-3 h-3 md:w-4 md:h-4" /> 

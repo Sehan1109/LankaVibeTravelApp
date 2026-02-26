@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, X, Send, Loader2, MapPin } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 
 interface SimplePackage {
     _id: string;

@@ -26,8 +26,8 @@ export const usePlanner = () => {
     departureTime: '18:00',
     budget: 2500,
     interests: [],
-    startPoint: 'Colombo Bandaranaike International Airport (CMB)', 
-    endPoint: 'Colombo Bandaranaike International Airport (CMB)',
+    startPoint: '', 
+    endPoint: '',
     nextDestination: '',
     nextDestinations: [],
     userNotes: '', 
@@ -36,7 +36,6 @@ export const usePlanner = () => {
     hotelRating: '4',
     vehicleType: 'Car',
     includeGuide: false,
-    pace: 'Moderate',
   });
 
   // Itinerary State
@@ -109,6 +108,22 @@ export const usePlanner = () => {
     setItinerary(null);
     
     try {
+      // --- අලුතින් එකතු කළ කොටස: Database එකේ isGenerated = true කිරීම ---
+      const sessionId = sessionStorage.getItem('planner_session_id'); 
+      if (sessionId) {
+          // API_BASE_URL එක දැනටමත් usePlanner.ts එකේ උඩින් define කරලා තියෙනවා (import.meta.env.VITE_BACKEND_URL + '/api')
+          fetch(`${API_BASE_URL}/plans/auto-save`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  sessionId: sessionId,
+                  inputData: input,
+                  isGenerated: true // <--- මේකෙන් තමයි Generated කියලා Database එකට යන්නේ!
+              })
+          }).catch(err => console.error("Failed to update generated status", err));
+      }
+      // ----------------------------------------------------------------------
+
       // Step 1: Generate Plan with Gemini (AI)
       const aiGeneratedItinerary = await generateItinerary(input);
       
@@ -242,10 +257,38 @@ export const usePlanner = () => {
     }
   };
 
-  const loadSavedPlan = (plan: any) => {
-      setItinerary(plan);
-      setIsSidebarOpen(false);
-  };
+  const loadSavedPlan = (savedDbRecord: any) => {
+      console.log("📂 Loading Saved Plan:", savedDbRecord);
+
+      // 1. Itinerary Data එක ගන්න
+      const itineraryData = savedDbRecord.itineraryData || savedDbRecord;
+
+      // 2. Input Data එක ගන්න
+      const savedInput = savedDbRecord.inputData;
+
+      if (itineraryData) {
+          setItinerary(itineraryData);
+          setHistory([itineraryData]);
+          setCurrentIndex(0);
+      }
+
+      // 3. Form එක Update කිරීම (Safe Merge)
+      if (savedInput) {
+          console.log("📝 Restoring Form Data...", savedInput);
+          
+          setInput((prevInput) => ({
+              ...prevInput, 
+              ...savedInput, 
+              interests: savedInput.interests || [],
+              nextDestinations: savedInput.nextDestinations || []
+          }));
+      } else {
+          console.warn("⚠️ No input data found in DB record");
+      }
+      setSaveStatus('saved');
+
+      setIsSidebarOpen(false);
+  };
 
   const deletePlan = async (planId: string) => {
     try {
@@ -287,49 +330,6 @@ export const usePlanner = () => {
        }
     }
   };
-
-  
-
-  const handleBookTrip = async (customerDetails: { name: string; email: string; phone: string }) => {
-    // 1. Get the currently active plan
-    const activePlan = (history && history.length > 0 && history[currentIndex]) 
-        ? history[currentIndex] 
-        : itinerary;
-
-    if (!activePlan) return;
-
-    // 2. Prepare the payload
-    const bookingPayload = {
-        customer: customerDetails,
-        tripDetails: {
-            travelers: input.travelers,
-            budget: input.budget,
-            arrivalDate: input.arrivalDate,
-            departureDate: input.departureDate,
-            startPoint: input.startPoint,
-            vehicle: input.vehicleType, // Assuming you have this in input
-        },
-        // 3. SEND THE FULL AI ITINERARY
-        fullItinerary: activePlan 
-    };
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/bookings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bookingPayload)
-        });
-
-        if (response.ok) {
-            alert("Booking Request Sent Successfully!");
-            // Optional: Redirect to a "Success" page
-        } else {
-            alert("Failed to send booking request.");
-        }
-    } catch (error) {
-        console.error("Booking Error:", error);
-    }
-};
 
 // NEW: Function to update ONLY costs (no AI regeneration)
   const handleUpdateCosts = async () => {
@@ -374,7 +374,6 @@ export const usePlanner = () => {
     fetchSavedPlans,
     loadSavedPlan,
     placesHandlers,
-    handleBookTrip,
     handleUpdateCosts
   };
 };
