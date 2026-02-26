@@ -40,7 +40,7 @@ jobs:
           npm ci --only=production || npm ci
 
       - name: Start SSH agent and add key
-        uses: webfactory/ssh-agent@v0.8.1
+        uses: webfactory/ssh-agent@v0.5.3
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
 
