@@ -43,6 +43,52 @@
 Follow these steps to set up the full project locally.
 
 ### 1. Prerequisites
+````markdown
+# 🇱🇰 LankaVibe Travel App
+
+**LankaVibe** is a comprehensive travel management platform designed to help tourists explore Sri Lanka. It combines traditional booking capabilities with AI-powered itinerary generation, offering a seamless experience from planning to travelling.
+
+## ✨ Key Features
+
+* **🤖 AI Trip Planner:** Generates personalized travel itineraries using Google Gemini AI.
+* **🗺️ Interactive Exploration:** Integrated Google Maps for location tracking and visualization.
+* **📦 Package Management:** Browse, create, and book curated travel packages.
+* **🏨 Resource Hub:** Connect with hotels, professional drivers, and tour guides.
+* **🚗 Vehicle Rentals:** specialized module for browsing and renting travel vehicles.
+* **🔐 Secure Auth:** Google OAuth and JWT-based authentication.
+* **📄 PDF Exports:** Download itineraries and booking details instantly.
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend (Client)
+
+* **Framework:** React 19 (Vite)
+* **Styling:** Tailwind CSS, Framer Motion
+* **APIs:** Google Maps API, Google Gemini (GenAI)
+* **Utilities:** jsPDF, html2canvas
+
+### Backend (Server)
+
+* **Runtime:** Node.js (ES Modules)
+* **Framework:** Express.js v5.2.1
+* **Database:** MongoDB (via Mongoose)
+* **Authentication:** jsonwebtoken, bcryptjs, google-auth-library
+* **Services:**
+* **Email:** `nodemailer` for notifications.
+* **Search:** `serpapi` for external search data.
+* **Storage:** `multer` (local) and `@supabase/supabase-js` (cloud).
+
+
+
+---
+
+## 🚀 Getting Started
+
+Follow these steps to set up the full project locally.
+
+### 1. Prerequisites
 
 * Node.js (v18 or higher recommended)
 * MongoDB (Local or Atlas connection string)
@@ -123,3 +169,30 @@ npm run dev
 # Client runs on http://localhost:5173
 
 ```
+
+## 🧩 Deployment (DigitalOcean Droplet + Nginx)
+
+Follow these concise steps to deploy to an Ubuntu DigitalOcean droplet with Nginx.
+
+- **Prepare droplet**: create a non-root `deploy` user, install Node.js (v18+), npm, and Nginx.
+
+- **Copy repo**: push the repo to the droplet (git clone) into `/home/deploy/LankaVibe-AI_Travel_planner`.
+
+- **Set backend env**: create `/home/deploy/LankaVibe-AI_Travel_planner/backend/.env` with required keys (see Backend Setup above).
+
+- **Install and run (automated)**: on the droplet run:
+
+```bash
+cd /home/deploy/LankaVibe-AI_Travel_planner
+chmod +x deploy/deploy.sh
+./deploy/deploy.sh
+```
+
+- **Edit Nginx config**: replace `example.com` in `deploy/nginx.lankavibe.conf` with your domain or droplet IP, then reload Nginx (script does this).
+
+- **Notes**:
+	- The script copies `frontend/dist` to `/var/www/lankavibe` and installs a systemd unit for the backend at `/etc/systemd/system/lankavibe-backend.service`.
+	- Ensure MongoDB connection in backend `.env` points to a reachable DB (Mongo Atlas or local).
+	- For TLS, use Certbot to obtain a certificate and update the Nginx site to listen on 443.
+
+````

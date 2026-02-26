@@ -1,0 +1,15 @@
+[Unit]
+Description=LankaVibe Backend
+After=network.target
+
+[Service]
+Environment=NODE_ENV=production
+WorkingDirectory=/home/deploy/LankaVibe-AI_Travel_planner/backend
+ExecStart=/usr/bin/node server.js
+Restart=always
+User=deploy
+Group=deploy
+EnvironmentFile=/home/deploy/LankaVibe-AI_Travel_planner/backend/.env
+
+[Install]
+WantedBy=multi-user.target

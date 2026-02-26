@@ -1,76 +1,93 @@
-name: Deploy to Google Cloud Run
+name: Deploy to DigitalOcean Droplet
 
 on:
   push:
     branches: [ "main", "dev" ]
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: ${{ secrets.GCP_REGION }}
-  REPO_NAME: lankavibe-repo
+  REMOTE_DIR: /home/deploy/LankaVibe-AI_Travel_planner
+  WEB_ROOT: /var/www/lankavibe
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # 1. Log in Google Cloud
-      - name: Google Auth
-        uses: google-github-actions/auth@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          node-version: '18'
 
-      # 2. Docker Setup 
-      - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
-
-      # --- BACKEND DEPLOYMENT ---
-      
-      - name: Build and Push Backend
-        run: |
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/backend:latest ./backend
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/backend:latest
-
-      - name: Deploy Backend to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v1
-        with:
-          service: lankavibe-backend
-          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/backend:latest
-          region: ${{ env.REGION }}
-          flags: '--port=5000 --allow-unauthenticated' # Backend එක 5000න් දුවන නිසා
-          env_vars: |
-            MONGO_URI=${{ secrets.MONGO_URI }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
-            SERPAPI_API_KEY=${{ secrets.SERPAPI_API_KEY }}
-            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
-            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-            SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
-            user=${{ secrets.EMAIL_USER }}
-            pass=${{ secrets.EMAIL_PASS }}
-            FRONTEND_URL=${{ secrets.PROD_FRONTEND_URL }}
-            
-      
-      # --- FRONTEND DEPLOYMENT ---
       - name: Create Frontend .env
         run: |
           echo "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" > ./frontend/.env
-          echo "VITE_GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}" >> ./frontend/.env
-          echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> ./frontend/.env
+          echo "VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}" >> ./frontend/.env
+          echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}" >> ./frontend/.env
           echo "VITE_BACKEND_URL=${{ secrets.PROD_BACKEND_URL }}" >> ./frontend/.env
 
-      - name: Build and Push Frontend
+      - name: Build Frontend
+        working-directory: ./frontend
         run: |
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/frontend:latest ./frontend
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/frontend:latest
+          npm ci
+          npm run build
 
-      - name: Deploy Frontend to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v1
+      - name: Prepare Backend (install deps)
+        working-directory: ./backend
+        run: |
+          npm ci --only=production || npm ci
+
+      - name: Start SSH agent and add key
+        uses: webfactory/ssh-agent@v0.8.1
         with:
-          service: lankavibe-frontend
-          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/frontend:latest
-          region: ${{ env.REGION }}
-          flags: '--port=80 --allow-unauthenticated'
+          ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+
+      - name: Add droplet to known_hosts
+        env:
+          SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          DO_HOST: ${{ secrets.DO_SSH_HOST }}
+        run: |
+          PORT=${SSH_PORT:-22}
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$PORT" "$DO_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copy frontend build to droplet webroot
+        env:
+          DO_USER: ${{ secrets.DO_SSH_USER }}
+          DO_HOST: ${{ secrets.DO_SSH_HOST }}
+          SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+        run: |
+          PORT=${SSH_PORT:-22}
+          rsync -avz -e "ssh -p $PORT" --delete frontend/dist/ "$DO_USER@$DO_HOST:$WEB_ROOT/"
+
+      - name: Copy backend files to droplet
+        env:
+          DO_USER: ${{ secrets.DO_SSH_USER }}
+          DO_HOST: ${{ secrets.DO_SSH_HOST }}
+          SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          REMOTE_DIR: ${{ env.REMOTE_DIR }}
+        run: |
+          PORT=${SSH_PORT:-22}
+          rsync -avz -e "ssh -p $PORT" --delete --exclude '.env' --exclude 'node_modules' backend/ "$DO_USER@$DO_HOST:$REMOTE_DIR/backend/"
+
+      - name: Copy deploy files (nginx, systemd) to droplet
+        env:
+          DO_USER: ${{ secrets.DO_SSH_USER }}
+          DO_HOST: ${{ secrets.DO_SSH_HOST }}
+          SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          REMOTE_DIR: ${{ env.REMOTE_DIR }}
+        run: |
+          PORT=${SSH_PORT:-22}
+          rsync -avz -e "ssh -p $PORT" deploy/ "$DO_USER@$DO_HOST:$REMOTE_DIR/deploy/"
+
+      - name: Restart backend and reload nginx on droplet
+        env:
+          DO_USER: ${{ secrets.DO_SSH_USER }}
+          DO_HOST: ${{ secrets.DO_SSH_HOST }}
+          SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          REMOTE_DIR: ${{ env.REMOTE_DIR }}
+        run: |
+          PORT=${SSH_PORT:-22}
+          ssh -p $PORT "$DO_USER@$DO_HOST" "sudo chown -R deploy:deploy $WEB_ROOT || true && sudo systemctl daemon-reload || true && sudo systemctl restart lankavibe-backend.service || true && sudo nginx -t && sudo systemctl reload nginx"
