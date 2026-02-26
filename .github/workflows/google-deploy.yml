@@ -13,65 +13,116 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # --------------------------------------------------
+      # Checkout code
+      # --------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --------------------------------------------------
+      # Setup Node.js
+      # --------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
+      # --------------------------------------------------
+      # Frontend ENV
+      # --------------------------------------------------
       - name: Create Frontend .env
         run: |
-          echo "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" > ./frontend/.env
-          echo "VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}" >> ./frontend/.env
-          echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}" >> ./frontend/.env
-          echo "VITE_BACKEND_URL=${{ secrets.PROD_BACKEND_URL }}" >> ./frontend/.env
+          echo "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" > frontend/.env
+          echo "VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}" >> frontend/.env
+          echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}" >> frontend/.env
+          echo "VITE_BACKEND_URL=${{ secrets.PROD_BACKEND_URL }}" >> frontend/.env
 
+      # --------------------------------------------------
+      # Build Frontend
+      # --------------------------------------------------
       - name: Build Frontend
-        working-directory: ./frontend
+        working-directory: frontend
         run: |
           npm ci || npm install --no-audit --prefer-offline
           npm run build
 
-      - name: Prepare Backend (install deps)
-        working-directory: ./backend
+      # --------------------------------------------------
+      # Prepare Backend (production deps only)
+      # --------------------------------------------------
+      - name: Prepare Backend
+        working-directory: backend
         run: |
           npm ci --only=production || npm install --no-audit --prefer-offline
 
+      # --------------------------------------------------
+      # Validate SSH secret
+      # --------------------------------------------------
       - name: Validate SSH private key secret
         run: |
           if [ -z "${{ secrets.DO_SSH_PRIVATE_KEY }}" ]; then
-            echo "ERROR: DO_SSH_PRIVATE_KEY secret is not set. Add it in Settings → Secrets → Actions." >&2
+            echo "ERROR: DO_SSH_PRIVATE_KEY secret is not set"
             exit 1
-          else
-            echo "SSH private key secret present."
           fi
 
-      - name: Start SSH agent and add key
+      # --------------------------------------------------
+      # Start SSH Agent
+      # --------------------------------------------------
+      - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.5.3
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
 
+      # --------------------------------------------------
+      # Add server to known_hosts
+      # --------------------------------------------------
       - name: Add droplet to known_hosts
         env:
-          SSH_PORT: ${{ secrets.DO_SSH_PORT }}
           DO_HOST: ${{ secrets.DO_SSH_HOST }}
+          SSH_PORT: ${{ secrets.DO_SSH_PORT }}
         run: |
           PORT=${SSH_PORT:-22}
           mkdir -p ~/.ssh
           ssh-keyscan -p "$PORT" "$DO_HOST" >> ~/.ssh/known_hosts
 
-      - name: Copy frontend build to droplet webroot
+      # --------------------------------------------------
+      # Ensure directories exist on server (CRITICAL)
+      # --------------------------------------------------
+      - name: Ensure directories exist on droplet
         env:
           DO_USER: ${{ secrets.DO_SSH_USER }}
           DO_HOST: ${{ secrets.DO_SSH_HOST }}
           SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          REMOTE_DIR: ${{ env.REMOTE_DIR }}
+          WEB_ROOT: ${{ env.WEB_ROOT }}
         run: |
           PORT=${SSH_PORT:-22}
-          rsync -avz -e "ssh -p $PORT" --delete frontend/dist/ "$DO_USER@$DO_HOST:$WEB_ROOT/"
+          ssh -p $PORT "$DO_USER@$DO_HOST" "
+            mkdir -p $REMOTE_DIR/backend &&
+            mkdir -p $REMOTE_DIR/deploy &&
+            sudo mkdir -p $WEB_ROOT &&
+            sudo chown -R deploy:deploy $WEB_ROOT
+          "
 
-      - name: Copy backend files to droplet
+      # --------------------------------------------------
+      # Deploy Frontend
+      # --------------------------------------------------
+      - name: Deploy Frontend
+        env:
+          DO_USER: ${{ secrets.DO_SSH_USER }}
+          DO_HOST: ${{ secrets.DO_SSH_HOST }}
+          SSH_PORT: ${{ secrets.DO_SSH_PORT }}
+          WEB_ROOT: ${{ env.WEB_ROOT }}
+        run: |
+          PORT=${SSH_PORT:-22}
+          rsync -avz --delete \
+            -e "ssh -p $PORT" \
+            frontend/dist/ \
+            "$DO_USER@$DO_HOST:$WEB_ROOT/"
+
+      # --------------------------------------------------
+      # Deploy Backend
+      # --------------------------------------------------
+      - name: Deploy Backend
         env:
           DO_USER: ${{ secrets.DO_SSH_USER }}
           DO_HOST: ${{ secrets.DO_SSH_HOST }}
@@ -79,9 +130,17 @@ jobs:
           REMOTE_DIR: ${{ env.REMOTE_DIR }}
         run: |
           PORT=${SSH_PORT:-22}
-          rsync -avz -e "ssh -p $PORT" --delete --exclude '.env' --exclude 'node_modules' backend/ "$DO_USER@$DO_HOST:$REMOTE_DIR/backend/"
+          rsync -avz --delete \
+            --exclude ".env" \
+            --exclude "node_modules" \
+            -e "ssh -p $PORT" \
+            backend/ \
+            "$DO_USER@$DO_HOST:$REMOTE_DIR/backend/"
 
-      - name: Copy deploy files (nginx, systemd) to droplet
+      # --------------------------------------------------
+      # Deploy Nginx & systemd files
+      # --------------------------------------------------
+      - name: Deploy server config files
         env:
           DO_USER: ${{ secrets.DO_SSH_USER }}
           DO_HOST: ${{ secrets.DO_SSH_HOST }}
@@ -89,14 +148,26 @@ jobs:
           REMOTE_DIR: ${{ env.REMOTE_DIR }}
         run: |
           PORT=${SSH_PORT:-22}
-          rsync -avz -e "ssh -p $PORT" deploy/ "$DO_USER@$DO_HOST:$REMOTE_DIR/deploy/"
+          rsync -avz \
+            -e "ssh -p $PORT" \
+            deploy/ \
+            "$DO_USER@$DO_HOST:$REMOTE_DIR/deploy/"
 
-      - name: Restart backend and reload nginx on droplet
+      # --------------------------------------------------
+      # Restart services
+      # --------------------------------------------------
+      - name: Restart backend & reload nginx
         env:
           DO_USER: ${{ secrets.DO_SSH_USER }}
           DO_HOST: ${{ secrets.DO_SSH_HOST }}
           SSH_PORT: ${{ secrets.DO_SSH_PORT }}
           REMOTE_DIR: ${{ env.REMOTE_DIR }}
+          WEB_ROOT: ${{ env.WEB_ROOT }}
         run: |
           PORT=${SSH_PORT:-22}
-          ssh -p $PORT "$DO_USER@$DO_HOST" "sudo chown -R deploy:deploy $WEB_ROOT || true && sudo systemctl daemon-reload || true && sudo systemctl restart lankavibe-backend.service || true && sudo nginx -t && sudo systemctl reload nginx"
+          ssh -p $PORT "$DO_USER@$DO_HOST" "
+            sudo systemctl daemon-reload &&
+            sudo systemctl restart lankavibe-backend.service &&
+            sudo nginx -t &&
+            sudo systemctl reload nginx
+          "
