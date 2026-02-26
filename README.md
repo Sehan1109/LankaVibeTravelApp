@@ -86,7 +86,7 @@ Follow these steps to set up the full project locally.
 
 ## 🚀 Getting Started
 
-Follow these steps to set up the full project locally.
+Follow these steps to set up the full project locally !.
 
 ### 1. Prerequisites
 
