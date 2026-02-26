@@ -39,6 +39,15 @@ jobs:
         run: |
           npm ci --only=production || npm install --no-audit --prefer-offline
 
+      - name: Validate SSH private key secret
+        run: |
+          if [ -z "${{ secrets.DO_SSH_PRIVATE_KEY }}" ]; then
+            echo "ERROR: DO_SSH_PRIVATE_KEY secret is not set. Add it in Settings → Secrets → Actions." >&2
+            exit 1
+          else
+            echo "SSH private key secret present."
+          fi
+
       - name: Start SSH agent and add key
         uses: webfactory/ssh-agent@v0.5.3
         with:
