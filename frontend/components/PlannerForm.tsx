@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Calendar, MapPin, Wallet, Heart, Users, Star, Car,
-  UserCheck, Loader2, RefreshCw, Sparkles, MessageSquare,
-  Clock, Activity,
-  DollarSign, X, Plus
+  MapPin, Wallet, Heart, Users, Car,
+  ArrowRight, ArrowLeft, CheckCircle2,
+  Sparkles, Loader2, RefreshCw, X, Plus, ChevronUp,
+  BedDouble, Baby, UserCheck,
+  FileText
 } from 'lucide-react';
 import { Autocomplete } from '@react-google-maps/api';
 import { PlannerInput, Interest } from '../types';
 
+// --- Interfaces ---
 export interface PlacesHandlers {
   onStartLoad: (autocomplete: google.maps.places.Autocomplete) => void;
   onStartChanged: () => void;
@@ -27,37 +29,31 @@ interface PlannerFormProps {
   handleUpdateCosts: () => void;
   itineraryExists: boolean;
   error: string | null;
+  onSaveProgress?: (step: number) => void;
 }
 
-// Defined capacities to be used in validation
-const VEHICLE_CAPACITIES: Record<string, number> = {
-  'Bike': 2,
-  'TukTuk': 3,
-  'Car': 4, 
-  'Car (Sedan)': 4,
-  'SUV': 4,
-  'Passenger Van': 12,
-  'Mini Bus': 25,
-  'Large Bus': 50,
-  'Large Bus (Coach)': 50
-};
-
 const INTERESTS: Interest[] = ['Nature', 'Culture', 'Adventure', 'Nightlife', 'Beaches', 'Wildlife'];
+const HOTEL_TYPES = ['Budget / Homestay', '3-Star Standard', '4-Star Comfort', '5-Star Luxury', 'Boutique Villa'];
 
 const PlannerForm: React.FC<PlannerFormProps> = ({
-  input,
-  setInput,
-  isLoaded,
-  placesHandlers,
-  loading,
-  handleGenerate,
-  handleUpdateCosts,
-  itineraryExists,
-  error
+  input, setInput, isLoaded, placesHandlers, loading,
+  handleGenerate, itineraryExists, error, onSaveProgress
 }) => {
-  // Local state for validation errors (e.g. date logic)
-  const [validationError, setValidationError] = useState<string | null>(null);
 
+  // --- State ---
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isCustomEndPoint, setIsCustomEndPoint] = useState(false);
+
+  // Auto-collapse form when itinerary exists
+  useEffect(() => {
+    if (itineraryExists) {
+      setIsExpanded(false);
+    }
+  }, [itineraryExists]);
+
+  // --- Handlers ---
   const toggleInterest = (interest: Interest) => {
     setInput(prev => {
       if (prev.interests.includes(interest)) {
@@ -67,89 +63,6 @@ const PlannerForm: React.FC<PlannerFormProps> = ({
     });
   };
 
-  // ---------------------------------------------------------
-  // 3. AUTO-SELECT VEHICLE BASED ON PASSENGERS
-  // ---------------------------------------------------------
-  useEffect(() => {
-    const totalPassengers = input.adults + input.children;
-    
-    let recommendedVehicle = input.vehicleType; 
-
-    // Logic to pick the smallest vehicle that fits the group
-    if (totalPassengers <= 2) {
-       // Prefer TukTuk generally, but allow bike if explicitly wanted later. 
-       // For auto-select, we usually default to TukTuk for comfort.
-       recommendedVehicle = 'TukTuk'; 
-    } else if (totalPassengers <= 3) {
-       recommendedVehicle = 'TukTuk';
-    } else if (totalPassengers <= 4) {
-       recommendedVehicle = 'Car (Sedan)';
-    } else if (totalPassengers <= 10) {
-       recommendedVehicle = 'Passenger Van';
-    } else if (totalPassengers <= 25) {
-       recommendedVehicle = 'Mini Bus';
-    } else {
-       recommendedVehicle = 'Large Bus (Coach)';
-    }
-
-    // Only update state if the recommended vehicle is different to avoid unnecessary renders
-    // logic: strictly map ONLY when numbers change.
-    setInput(prev => ({ ...prev, vehicleType: recommendedVehicle }));
-    
-  }, [input.adults, input.children]); // Run only when pax count changes
-
-
-  // ---------------------------------------------------------
-  // 4. UPDATED VALIDATION LOGIC
-  // ---------------------------------------------------------
-  const validateAndGenerate = () => {
-    setValidationError(null);
-
-    // 1. Check Dates
-    if (!input.arrivalDate || !input.departureDate) {
-      setValidationError("Please select both Arrival and Departure dates.");
-      return;
-    }
-
-    // 2. Check Date Logic
-    const arrival = new Date(input.arrivalDate);
-    const departure = new Date(input.departureDate);
-
-    if (departure <= arrival) {
-      setValidationError("Departure date must be at least one day after the Arrival date.");
-      return;
-    }
-
-    // 3. CHECK VEHICLE CAPACITY (New Logic using the Object)
-    const totalPassengers = input.adults + input.children;
-    
-    // Find max capacity by matching the selected string to the key in VEHICLE_CAPACITIES
-    // We use a flexible lookup or default to 50
-    let maxCapacity = 50;
-    
-    // Check specific matches first
-    if (VEHICLE_CAPACITIES[input.vehicleType]) {
-        maxCapacity = VEHICLE_CAPACITIES[input.vehicleType];
-    } else {
-        // Fallback for partial matches (e.g. if string varies slightly)
-        if (input.vehicleType.includes('Bike')) maxCapacity = 2;
-        else if (input.vehicleType.includes('TukTuk')) maxCapacity = 3;
-        else if (input.vehicleType.includes('Car')) maxCapacity = 4;
-        else if (input.vehicleType.includes('SUV')) maxCapacity = 4;
-        else if (input.vehicleType.includes('Van')) maxCapacity = 12;
-        else if (input.vehicleType.includes('Mini Bus')) maxCapacity = 25;
-        else if (input.vehicleType.includes('Large Bus')) maxCapacity = 50;
-    }
-
-    if (totalPassengers > maxCapacity) {
-      setValidationError(`Too many people (${totalPassengers}) for a ${input.vehicleType}. Please choose a larger vehicle.`);
-      return;
-    }
-
-    // 4. Call Parent
-    handleGenerate();
-  };
-
   const removeStop = (index: number) => {
     setInput(prev => ({
       ...prev,
@@ -157,414 +70,408 @@ const PlannerForm: React.FC<PlannerFormProps> = ({
     }));
   };
 
-  return (
-    <div className="lg:col-span-4 space-y-4 sm:space-y-6">
-      {/* Adjusted padding and border radius for mobile vs desktop */}
-      <div className="bg-white p-5 sm:p-6 md:p-8 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-emerald-50 space-y-5 sm:space-y-6">
+  // --- Validation ---
+  const validateStep = (step: number): boolean => {
+    setValidationError(null);
+    if (step === 1) {
+      if (!input.arrivalDate || !input.departureDate) {
+        setValidationError("Please select Arrival and Departure dates.");
+        return false;
+      }
+      if (new Date(input.departureDate) <= new Date(input.arrivalDate)) {
+        setValidationError("Departure must be after Arrival.");
+        return false;
+      }
+      if (!input.startPoint) {
+        setValidationError("Please select a Start Point.");
+        return false;
+      }
+    }
+    return true;
+  };
 
-        {/* ============================================================ */}
-        {/* SECTION 1: LOGISTICS (DATES & LOCATIONS)                     */}
-        {/* ============================================================ */}
-        {!itineraryExists && (
-          <div className="space-y-5 sm:space-y-6 animate-fade-in-down">
-            
-            {/* Arrival Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4">
-              {/* Arrival Date */}
-              <div className="sm:col-span-7 space-y-2">
-                <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-                  <Calendar className="w-4 h-4 text-emerald-600" /> Arrival Date
-                </label>
-                <input
-                  type="date"
-                  value={input.arrivalDate}
-                  onChange={e => {
-                    setValidationError(null);
-                    setInput({ ...input, arrivalDate: e.target.value });
-                  }}
-                  className="w-full p-3 bg-gray-50 rounded-xl sm:rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-600 text-sm sm:text-base"
-                />
-              </div>
+  const handleNext = () => {
+  if (validateStep(currentStep)) {
+    
+    if (onSaveProgress) {
+        onSaveProgress(currentStep); 
+    }
 
-              {/* Arrival Time */}
-              <div className="sm:col-span-5 space-y-2">
-                <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-                  <Clock className="w-4 h-4 text-emerald-600" /> Time
-                </label>
-                <input
-                  type="time"
-                  value={input.arrivalTime}
-                  onChange={e => setInput({ ...input, arrivalTime: e.target.value })}
-                  className="w-full p-3 bg-gray-50 rounded-xl sm:rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-600 text-sm sm:text-base"
-                />
-              </div>
-            </div>
+    setCurrentStep(prev => prev + 1);
+  }
+};
 
-            {/* Departure Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4">
-              {/* Departure Date */}
-              <div className="sm:col-span-7 space-y-2">
-                <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-                  <Calendar className="w-4 h-4 text-emerald-600" /> Departure Date
-                </label>
-                <input
-                  type="date"
-                  value={input.departureDate}
-                  min={input.arrivalDate} 
-                  onChange={e => {
-                    setValidationError(null);
-                    setInput({ ...input, departureDate: e.target.value });
-                  }}
-                  className="w-full p-3 bg-gray-50 rounded-xl sm:rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-600 text-sm sm:text-base"
-                />
-              </div>
+  const handlePrev = () => {
+    setValidationError(null);
+    setCurrentStep(prev => prev - 1);
+  };
 
-              {/* Departure Time */}
-              <div className="sm:col-span-5 space-y-2">
-                <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-                  <Clock className="w-4 h-4 text-emerald-600" /> Time
-                </label>
-                <input
-                  type="time"
-                  value={input.departureTime} 
-                  onChange={e => setInput({ ...input, departureTime: e.target.value })}
-                  className="w-full p-3 bg-gray-50 rounded-xl sm:rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-600 text-sm sm:text-base"
-                />
-              </div>
-            </div>
+  const handleGenerateClick = () => {
+    if (onSaveProgress) {
+        // අන්තිම step එකේ data ටිකත් generate වෙන්න කලින් save කරන්න
+        onSaveProgress(4); 
+    }
+    // ඉන්පසු සාමාන්‍ය handleGenerate function එක කතා කරන්න
+    handleGenerate();
+  };
 
-            {/* Start Point */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-                <MapPin className="w-4 h-4 text-emerald-600" /> Start Point
-              </label>
-              {isLoaded ? (
-                <Autocomplete
-                  onLoad={placesHandlers.onStartLoad}
-                  onPlaceChanged={placesHandlers.onStartChanged}
-                  options={{ componentRestrictions: { country: "lk" } }}
-                >
-                  <input
-                    type="text"
-                    value={input.startPoint}
-                    onChange={(e) => setInput({ ...input, startPoint: e.target.value })}
-                    placeholder="e.g. Colombo Airport..."
-                    className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 font-medium text-gray-700 text-sm sm:text-base"
-                  />
-                </Autocomplete>
-              ) : (
-                <div className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl text-gray-400 text-sm">Loading Maps...</div>
-              )}
-            </div>
+  // --- Render Steps ---
 
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-                <MapPin className="w-4 h-4 text-emerald-600" /> End Point
-              </label>
-              {isLoaded ? (
-                <Autocomplete
-                  onLoad={placesHandlers.onEndLoad}
-                  onPlaceChanged={placesHandlers.onEndChanged}
-                  options={{ componentRestrictions: { country: "lk" } }}
-                >
-                  <input
-                    type="text"
-                    value={input.endPoint}
-                    onChange={(e) => setInput({ ...input, endPoint: e.target.value })}
-                    placeholder="e.g. Colombo Airport..."
-                    className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 font-medium text-gray-700 text-sm sm:text-base"
-                  />
-                </Autocomplete>
-              ) : (
-                <div className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl text-gray-400 text-sm">Loading Maps...</div>
-              )}
-            </div>
-
-            {/* Next Destination (Optional) */}
-            <div className="space-y-2 pt-4 border-t border-gray-100">
-              <label className="flex items-center gap-2 font-bold text-gray-700 text-sm">
-                Specific Stops (Optional)
-              </label>
-
-              {/* Render Added Stops */}
-              <div className="flex flex-wrap gap-2 mb-2">
-                {input.nextDestinations.map((stop, index) => (
-                  <span 
-                    key={index} 
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full"
-                  >
-                    {stop}
-                    <button 
-                      onClick={() => removeStop(index)}
-                      className="p-0.5 hover:bg-emerald-200 rounded-full transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-
-              {/* Input for New Stop */}
-              {isLoaded ? (
-                <Autocomplete
-                  onLoad={placesHandlers.onNextLoad}
-                  onPlaceChanged={placesHandlers.onNextChanged}
-                  options={{ componentRestrictions: { country: "lk" } }}
-                >
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={input.nextDestination} 
-                      onChange={(e) => setInput({ ...input, nextDestination: e.target.value })}
-                      placeholder="Add a city (e.g. Ella, Sigiriya)..."
-                      className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                    />
-                    <div className="absolute right-3 top-3 text-gray-400 pointer-events-none">
-                        <Plus className="w-4 h-4" />
-                    </div>
-                  </div>
-                </Autocomplete>
-              ) : null}
-              <p className="text-[10px] text-gray-400">Search and select a location to add it to your route.</p>
-            </div>
+  // STEP 1: Dates & Route
+  const renderStep1 = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Arrival */}
+        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+          <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Arrival</label>
+          <div className="flex gap-6">
+            <input
+              type="date"
+              value={input.arrivalDate}
+              onChange={e => setInput({ ...input, arrivalDate: e.target.value })}
+              onClick={(e) => e.currentTarget.showPicker()}
+              className="w-full bg-transparent font-bold text-gray-700 outline-none cursor-pointer"
+            />
+            <input
+              type="time"
+              value={input.arrivalTime}
+              onChange={e => setInput({ ...input, arrivalTime: e.target.value })}
+              onClick={(e) => e.currentTarget.showPicker()}
+              className="w-32 bg-transparent font-bold text-gray-700 outline-none text-right cursor-pointer"
+            />
           </div>
-        )}
+        </div>
 
-        {/* ============================================================ */}
-        {/* SECTION 2: UPDATABLE PREFERENCES (ALWAYS VISIBLE)            */}
-        {/* ============================================================ */}
-        
-        {itineraryExists && (
-            <div className="pb-2 border-b border-gray-100 mb-4">
-                <h3 className="text-emerald-800 font-bold text-lg flex items-center gap-2">
-                    <RefreshCw className="w-5 h-5" /> Refine Your Plan
-                </h3>
-                <p className="text-xs text-gray-400">Update these settings to recalculate costs or regenerate the plan.</p>
-            </div>
-        )}
+        {/* Departure */}
+        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+          <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Departure</label>
+          <div className="flex gap-6">
+            <input
+              type="date"
+              value={input.departureDate}
+              min={input.arrivalDate}
+              onChange={e => setInput({ ...input, departureDate: e.target.value })}
+              onClick={(e) => e.currentTarget.showPicker()}
+              className="w-full bg-transparent font-bold text-gray-700 outline-none cursor-pointer"
+            />
+            <input
+              type="time"
+              value={input.departureTime}
+              onChange={e => setInput({ ...input, departureTime: e.target.value })}
+              onClick={(e) => e.currentTarget.showPicker()}
+              className="w-32 bg-transparent font-bold text-gray-700 outline-none text-right cursor-pointer"
+            />
+          </div>
+        </div>
+      </div>
 
-        {/* Budget */}
-        <div className="space-y-4">
-          <label className="flex items-center justify-between font-bold text-gray-700 text-sm sm:text-base">
-            <span className="flex items-center gap-2"><Wallet className="w-4 h-4 text-emerald-600" /> Budget (USD)</span>
-            <span className="text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full text-xs font-bold">${input.budget}</span>
+      {/* Locations */}
+      <div className="space-y-4">
+        <div>
+          <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
+            <MapPin className="w-4 h-4 text-emerald-600" /> Start Point
           </label>
-          <input
-            type="range"
-            min="500"
-            max="10000"
-            step="100"
-            value={input.budget}
-            onChange={e => setInput({ ...input, budget: Number(e.target.value) })}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-          />
+          {isLoaded ? (
+            <Autocomplete onLoad={placesHandlers.onStartLoad} onPlaceChanged={placesHandlers.onStartChanged} options={{ componentRestrictions: { country: "lk" } }}>
+              <input
+                type="text"
+                value={input.startPoint}
+                onChange={(e) => setInput({ ...input, startPoint: e.target.value })}
+                placeholder="Where does your journey begin?"
+                className="w-full p-4 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium"
+              />
+            </Autocomplete>
+          ) : <div className="p-4 bg-gray-50 rounded-xl text-gray-400">Loading Maps...</div>}
         </div>
 
-        {/* Adults & Children & Hotel Grid - Responsive adjustment */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-              <Users className="w-4 h-4 text-emerald-600" /> Adults
-            </label>
-            <select
-              value={input.adults}
-              onChange={e => setInput({ ...input, adults: Number(e.target.value) })}
-              className="w-full p-3 bg-gray-50 rounded-xl sm:rounded-2xl border-none font-bold text-gray-600 text-sm sm:text-base"
-            >
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50].map(n => <option key={n} value={n}>{n} Pax</option>)}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-              <span className="text-emerald-600 text-lg">👶</span> Children
-            </label>
-            <select
-              value={input.children}
-              onChange={e => setInput({ ...input, children: Number(e.target.value) })}
-              className="w-full p-3 bg-gray-50 rounded-xl sm:rounded-2xl border-none font-bold text-gray-600 text-sm sm:text-base"
-            >
-              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                <option key={n} value={n}>{n} Kids</option>
-              ))}
-            </select>
-          </div>
-          {/* On mobile (grid-cols-2), this takes full width of the second row if needed, or sits nicely in grid-cols-3 on tablet */}
-          <div className="col-span-2 sm:col-span-1 space-y-2">
-            <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-              <Star className="w-4 h-4 text-emerald-600" /> Hotel
-            </label>
-            <select
-              value={input.hotelRating}
-              onChange={e => setInput({ ...input, hotelRating: e.target.value })}
-              className="w-full p-3 bg-gray-50 rounded-xl sm:rounded-2xl border-none font-bold text-gray-600 text-sm sm:text-base"
-            >
-              <option value="3">3 Star</option>
-              <option value="4">4 Star</option>
-              <option value="5">5 Star</option>
-              <option value="Luxury">Luxury</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Trip Pace & Preferences Section */}
-        <div className="grid grid-cols-1 gap-4 pt-4 border-t border-gray-100">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-              <Activity className="w-4 h-4 text-emerald-600" /> Trip Pace
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {['Relaxed', 'Moderate', 'Packed'].map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setInput({ ...input, pace: p as any })}
-                  className={`py-2 px-1 rounded-xl text-[10px] sm:text-xs font-bold border transition-all ${input.pace === p
-                    ? 'bg-emerald-600 text-white border-emerald-600'
-                    : 'bg-gray-50 text-gray-600 border-transparent hover:bg-emerald-50'
-                    }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Vehicle */}
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-            <Car className="w-4 h-4 text-emerald-600" /> Vehicle
+        <div>
+          <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
+            <MapPin className="w-4 h-4 text-emerald-600" /> End Point (Optional)
           </label>
           <select
-            value={input.vehicleType}
-            onChange={e => setInput({ ...input, vehicleType: e.target.value })}
-            className="w-full p-3 bg-gray-50 rounded-xl sm:rounded-2xl border-none font-bold text-gray-600 text-sm sm:text-base"
+            value={isCustomEndPoint ? 'custom' : input.endPoint || 'linear'}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === 'custom') { setIsCustomEndPoint(true); setInput({ ...input, endPoint: '' }); }
+              else {
+                setIsCustomEndPoint(false);
+                if (val === 'linear') setInput({ ...input, endPoint: '' });
+                else setInput({ ...input, endPoint: val === 'round_trip' ? input.startPoint : val });
+              }
+            }}
+            className="w-full p-3 mb-2 bg-gray-50 border-none rounded-xl font-medium text-gray-600 focus:ring-2 focus:ring-emerald-500"
           >
-            <option value="Bike">Bike (Max 2)</option>
-            <option value="TukTuk">TukTuk (Max 3)</option>
-            <option value="Car (Sedan)">Car (Max 4)</option>
-            <option value="SUV">SUV (Max 4)</option>
-            <option value="Passenger Van">Passenger Van (Max 12)</option>
-            <option value="Mini Bus">Mini Bus (Max 25)</option>
-            <option value="Large Bus (Coach)">Large Bus (Max 50)</option>
+            <option value="linear">End at Last Destination (Default)</option>
+            <option value="round_trip">Round Trip (Back to Start)</option>
+            <option value="Colombo Bandaranaike International Airport (CMB)">Drop at Airport (CMB)</option>
+            <option value="custom">Custom Location...</option>
           </select>
-          <p className="text-[10px] text-gray-400 pl-1">
-              Recommended for {input.adults + input.children} passengers
-          </p>
+          {isCustomEndPoint && isLoaded && (
+            <Autocomplete onLoad={placesHandlers.onEndLoad} onPlaceChanged={placesHandlers.onEndChanged} options={{ componentRestrictions: { country: "lk" } }}>
+              <input type="text" value={input.endPoint} onChange={(e) => setInput({ ...input, endPoint: e.target.value })} placeholder="Enter drop-off city..." className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+            </Autocomplete>
+          )}
         </div>
+      </div>
+    </div>
+  );
 
-        {/* Interests */}
-        <div className="space-y-4">
-          <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-            <Heart className="w-4 h-4 text-emerald-600" /> Interests
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {INTERESTS.map(i => (
-              <button
-                key={i}
-                onClick={() => toggleInterest(i)}
-                className={`px-3 py-2 sm:py-1.5 rounded-full text-xs font-bold border transition-all ${input.interests.includes(i)
-                  ? 'bg-cyan-600 text-white border-cyan-600'
-                  : 'bg-white text-gray-600 border-gray-100 hover:bg-cyan-50'
-                  }`}
-              >
-                {i}
-              </button>
-            ))}
+  // STEP 2: Travelers & Vehicle
+  const renderStep2 = () => (
+    <div className="space-y-6 animate-fade-in">
+      {/* Budget */}
+      <div className="bg-emerald-50 p-5 rounded-2xl flex items-center justify-between">
+        <div>
+          <span className="flex items-center gap-2 text-emerald-800 font-bold mb-1"><Wallet className="w-4 h-4" /> Budget (USD)</span>
+          <p className="text-xs text-emerald-600">Approx. per person excluding flights</p>
+        </div>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-700 font-bold">$</span>
+          <input
+            type="number"
+            value={input.budget}
+            onChange={e => setInput({ ...input, budget: Number(e.target.value) })}
+            className="w-32 pl-6 pr-3 py-2 bg-white text-right font-bold rounded-lg border-2 border-emerald-200 focus:border-emerald-500 outline-none"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white p-4 border border-gray-200 rounded-2xl text-center hover:border-emerald-400 transition-colors">
+          <Users className="w-6 h-6 mx-auto text-emerald-600 mb-2" />
+          <label className="block text-sm font-bold text-gray-600 mb-2">Adults</label>
+          <select value={input.adults} onChange={e => setInput({ ...input, adults: Number(e.target.value) })} className="w-full text-center font-bold text-lg bg-transparent outline-none">
+            {[1, 2, 3, 4, 5, 6, 8, 10, 15, 20].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div className="bg-white p-4 border border-gray-200 rounded-2xl text-center hover:border-emerald-400 transition-colors">
+          <Baby className="w-6 h-6 mx-auto text-emerald-600 mb-2" />
+          <label className="block text-sm font-bold text-gray-600 mb-2">Children</label>
+          <select value={input.children} onChange={e => setInput({ ...input, children: Number(e.target.value) })} className="w-full text-center font-bold text-lg bg-transparent outline-none">
+            {[0, 1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
+          <Car className="w-4 h-4 text-emerald-600" /> Preferred Vehicle
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {['TukTuk', 'Car (Sedan)', 'SUV', 'Passenger Van', 'Mini Bus'].map((v) => (
+            <button
+              key={v}
+              onClick={() => setInput({ ...input, vehicleType: v })}
+              className={`p-3 rounded-xl text-sm font-bold border ${input.vehicleType === v ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-white p-2 rounded-full text-emerald-600 shadow-sm">
+            <UserCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-gray-700 text-sm">Need a Tour Guide?</h4>
+            <p className="text-xs text-emerald-700">Add a professional guide for the trip</p>
           </div>
         </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={input.includeGuide || false}
+            onChange={(e) => setInput({ ...input, includeGuide: e.target.checked })}
+            className="sr-only peer"
+          />
+          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+        </label>
+      </div>
+    </div>
+  );
 
-        {/* Additional Ideas / User Notes */}
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 font-bold text-gray-700 text-sm sm:text-base">
-            <MessageSquare className="w-4 h-4 text-emerald-600" /> Any Specific Ideas?
-          </label>
+  // STEP 3: Vibe, Hotels & Budget
+  const renderStep3 = () => (
+    <div className="space-y-6 animate-fade-in">
+
+      {/* Accommodation Section */}
+      <div>
+        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
+          <BedDouble className="w-4 h-4 text-emerald-600" /> Accommodation Preference
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {HOTEL_TYPES.map((type) => (
+            <button
+              key={type}
+              onClick={() => setInput({ ...input, hotelRating: type })}
+              className={`p-3 rounded-xl text-xs sm:text-sm font-bold border transition-all ${input.hotelRating === type
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'
+                }`}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Interests */}
+      <div>
+        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
+          <Heart className="w-4 h-4 text-red-500" /> What do you love?
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {INTERESTS.map(i => (
+            <button
+              key={i}
+              onClick={() => toggleInterest(i)}
+              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${input.interests.includes(i) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-200'}`}
+            >
+              {i}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Specific Stops */}
+      <div className="space-y-2">
+        <label className="text-sm font-bold text-gray-700">Must-visit places (Optional)</label>
+        <div className="flex flex-wrap gap-2">
+          {input.nextDestinations.map((stop, idx) => (
+            <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+              {stop} <button onClick={() => removeStop(idx)}><X className="w-3 h-3 hover:text-red-500" /></button>
+            </span>
+          ))}
+        </div>
+        {isLoaded && (
+          <Autocomplete onLoad={placesHandlers.onNextLoad} onPlaceChanged={placesHandlers.onNextChanged} options={{ componentRestrictions: { country: "lk" } }}>
+            <div className="relative">
+              <input type="text" value={input.nextDestination} onChange={(e) => setInput({ ...input, nextDestination: e.target.value })} placeholder="+ Add stop (e.g. Ella)" className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm focus:ring-emerald-500 outline-none" />
+              <Plus className="absolute right-3 top-3 w-4 h-4 text-gray-400" />
+            </div>
+          </Autocomplete>
+        )}
+      </div>
+    </div>
+  );
+
+  // STEP 4: Special Notes & Finalize (NEW SECTION)
+  const renderStep4 = () => (
+    <div className="space-y-6 animate-fade-in flex flex-col h-full justify-between">
+      <div>
+        <div className="text-center mb-6">
+          <div className="bg-emerald-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+            <FileText className="w-6 h-6 text-emerald-600" />
+          </div>
+          <h3 className="text-xl font-black text-gray-800">Final Touches</h3>
+          <p className="text-gray-500 text-sm">Anything else we should know before planning?</p>
+        </div>
+
+        <div className="relative">
           <textarea
             value={input.userNotes}
             onChange={(e) => setInput({ ...input, userNotes: e.target.value })}
-            placeholder="E.g., I want to see elephants, I need a wheelchair, etc."
-            className="w-full p-3 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-emerald-500 text-sm text-gray-700 resize-none h-24"
+            placeholder="Tell us about dietary restrictions, allergies, specific interests, or any special occasions like anniversaries..."
+            className="w-full p-5 bg-white border border-gray-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none min-h-[160px] text-sm font-medium resize-none shadow-sm transition-all focus:border-emerald-300"
           />
+          <div className="absolute bottom-3 right-3 text-xs text-gray-400 font-medium">
+            Optional
+          </div>
         </div>
+      </div>
+    </div>
+  );
 
-        {/* Guide Toggle */}
-        <div className="flex items-center justify-between p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-          <label className="flex items-center gap-2 text-sm font-bold text-emerald-800">
-            <UserCheck className="w-4 h-4" /> Include Tour Guide?
-          </label>
-          <input
-            type="checkbox"
-            checked={input.includeGuide}
-            onChange={(e) => setInput({ ...input, includeGuide: e.target.checked })}
-            className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500"
-          />
+  // --- Main Render ---
+
+  if (!isExpanded && itineraryExists) {
+    return (
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in-down">
+        <div className="flex items-center gap-3">
+          <div className="bg-emerald-100 p-2 rounded-full text-emerald-600"><CheckCircle2 className="w-5 h-5" /></div>
+          <div>
+            <h3 className="font-bold text-gray-800">Trip Plan Ready!</h3>
+            <p className="text-xs text-gray-500">{input.adults + input.children} Travelers • {input.hotelType || 'Standard'} • ${input.budget}</p>
+          </div>
         </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button onClick={() => setIsExpanded(true)} className="flex-1 sm:flex-none px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4" /> Edit Plan
+          </button>
+          <button 
+  onClick={handleGenerateClick} 
+  disabled={loading}
+  className="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-70 disabled:pointer-events-none"
+>
+  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+  Regenerate Plan
+</button>
+        </div>
+      </div>
+    );
+  }
 
-        {/* ERROR MESSAGES */}
-        {/* 1. Validation Error (Local) */}
+  return (
+    <div className="bg-white rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden relative">
+
+      {/* Header / Progress Bar */}
+      <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+        <div className="flex gap-2">
+          {/* Changed loop to 4 steps */}
+          {[1, 2, 3, 4].map(step => (
+            <div key={step} className={`h-2 rounded-full transition-all duration-300 ${step <= currentStep ? 'w-8 bg-emerald-500' : 'w-2 bg-gray-300'}`} />
+          ))}
+        </div>
+        <button onClick={() => itineraryExists ? setIsExpanded(false) : null} className="text-gray-400 hover:text-gray-600">
+          {itineraryExists && <ChevronUp className="w-5 h-5" />}
+        </button>
+      </div>
+
+      <div className="p-6 sm:p-8">
+        <h2 className="text-2xl font-black text-gray-800 mb-1">
+          {currentStep === 1 && "Plan Your Journey"}
+          {currentStep === 2 && "Who is Traveling?"}
+          {currentStep === 3 && "Customize Experience"}
+          {currentStep === 4 && "Almost There!"}
+        </h2>
+        <p className="text-sm text-gray-500 mb-6">Step {currentStep} of 4</p>
+
         {validationError && (
-          <div className="animate-fade-in bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-lg">
-            <div className="flex items-center gap-2 text-yellow-800 font-bold text-sm">
-              <span className="text-xl">⚠️</span> {validationError}
-            </div>
+          <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-bold mb-4 flex items-center gap-2">
+            <span className="text-lg">⚠️</span> {validationError}
           </div>
         )}
+        {error && <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm mb-4">{error}</div>}
 
-        {/* 2. API Error (Props) */}
-        {error && (
-          <div className="animate-fade-in bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
-            <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
-              <span className="text-xl">⚠️</span> {error}
-            </div>
-          </div>
-        )}
+        <div className="min-h-[300px]">
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+          {currentStep === 4 && renderStep4()}
+        </div>
 
-        {/* ACTION BUTTONS AREA */}
-        <div className="pt-4 border-t border-gray-100">
-          {!itineraryExists ? (
-            // SCENARIO 1: Generate (Big Button)
-            <button
-              onClick={validateAndGenerate} // CHANGED: Calls local validation first
-              disabled={loading}
-              className="group relative w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg rounded-2xl shadow-xl shadow-emerald-100 transition-all active:scale-95 disabled:opacity-70 disabled:pointer-events-none overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
-              <div className="relative flex items-center justify-center gap-3">
-                {loading ? (
-                  <>
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                    <span className="text-base sm:text-lg">Designing Your Dream Trip...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
-                    <span className="text-base sm:text-lg">Generate My Plan</span>
-                  </>
-                )}
-              </div>
+        <div className="flex items-center justify-between pt-6 mt-2 border-t border-gray-50">
+          {currentStep > 1 ? (
+            <button onClick={handlePrev} className="px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-100 flex items-center gap-2 transition-colors">
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+          ) : <div></div>}
+
+          {/* Changed Button Logic for 4 Steps */}
+          {currentStep < 4 ? (
+            <button onClick={handleNext} className="px-8 py-3 rounded-xl font-bold bg-gray-900 text-white hover:bg-black flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95">
+              Next Step <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
-            // SCENARIO 2: Update Buttons
-            <div className="grid grid-cols-1 gap-3">
-              <button
-                onClick={handleUpdateCosts}
-                disabled={loading}
-                className="relative py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 disabled:pointer-events-none"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <DollarSign className="w-5 h-5" />}
-                <span>Update the Plan</span>
-              </button>
-            </div>
-          )}
-
-          {itineraryExists && !loading && (
-            <div className="text-center mt-4">
-               <button 
-                  onClick={() => window.location.reload()} 
-                  className="text-xs text-gray-400 hover:text-red-500 font-semibold underline transition-colors"
-                >
-                  Start a Completely New Plan (Reset All)
-                </button>
-            </div>
+            <button
+              onClick={handleGenerateClick}
+              disabled={loading}
+              className="px-8 py-3 rounded-xl font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-2 shadow-lg shadow-emerald-200 hover:shadow-xl transition-all active:scale-95 disabled:opacity-70 disabled:pointer-events-none"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+              {itineraryExists ? "Regenerate Plan" : "Generate Itinerary"}
+            </button>
           )}
         </div>
       </div>

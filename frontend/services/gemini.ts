@@ -8,7 +8,7 @@ import { PlannerInput, Itinerary, ItineraryDay } from "../types";
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 // USE A STABLE MODEL (You can change this to 'gemini-1.5-flash' if 2.0 gives issues)
-const MODEL_NAME = 'gemini-2.5-flash'; 
+const MODEL_NAME = 'gemini-2.0-flash'; 
 
 // --- HELPER: SAFE JSON EXTRACTION (Fixes "response.text is not a function") ---
 const cleanResponse = (response: any): string => {
@@ -115,7 +115,20 @@ const DAY_SCHEMA_PROPERTIES = {
         }
     },
     description: { type: Type.STRING },
-    meals: { type: Type.ARRAY, items: { type: Type.STRING }},
+
+    suggestions: {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING },
+                description: { type: Type.STRING },
+                category: { type: Type.STRING },
+                estimatedCost: { type: Type.NUMBER },
+                duration: { type: Type.STRING, description: "e.g. '2 hours' or '45 mins'" }
+            }
+        }
+    },
     
     // ATTACH COST SCHEMA HERE
     estimatedCost: COST_SCHEMA,
@@ -147,103 +160,290 @@ const DAY_SCHEMA_PROPERTIES = {
     },
     activityImageKeyword: { type: Type.STRING },
     travelTime: { type: Type.STRING },
-    travelDistance: { type: Type.STRING }
+    travelDistance: { type: Type.STRING },
+    isDayBudgetSufficient: { type: Type.BOOLEAN },
+    budgetWarningMessage: { type: Type.STRING}
 };
 
 // --- MAIN GENERATION FUNCTION ---
 
 export const generateItinerary = async (input: PlannerInput): Promise<Itinerary> => {
     const totalDays = calculateDays(input.arrivalDate, input.departureDate);
+    const dailyBudget = Math.floor(input.budget / totalDays);
 
-    const stopsList = input.nextDestinations && input.nextDestinations.length > 0 
-        ? input.nextDestinations.join(", ") 
-        : "";
+    console.log("📍 Step 1: සම්පූර්ණ ගමන් මාර්ගය (Master Route) සැලසුම් කරමින්...");
 
-    const mandatoryStop = stopsList
-        ? `IMPORTANT REQUEST: The route MUST include visits to the following locations: [${stopsList}]. Plan the itinerary order logically to accommodate these stops.`
-        : "";
-
-    const specificIdeas = input.userNotes
-        ? `USER SPECIFIC PREFERENCES/NOTES: "${input.userNotes}". You MUST prioritize incorporating these requests into the activities, style of travel, or food choices.`
-        : "";
-
-    const endPoint = input.endPoint?.trim() || "Bandaranaike International Airport (CMB)";
-
-    // Prompt Construction
-    const prompt = `
-        Create a detailed ${totalDays}-day Sri Lanka trip for ${input.adults && input.children ? `${input.adults} adults and ${input.children} children` : input.adults ? `${input.adults} adults` : "1 adult"}.
-        
-        LOGISTICS:
-        - Budget: $${input.budget} (Total)
-        - Start: ${input.startPoint}
-        - End: ${endPoint}
-        - Vehicle: ${input.vehicleType} (Rates: Car ~$45, Van ~$60, SUV ~$80)
-        - Guide: ${input.includeGuide ? "YES (Add ~$25/day)" : "NO"}
-        - Hotel Tier: ${input.hotelRating}
-        - Arrival: ${input.arrivalDate} at ${input.arrivalTime}
-        - Departure: ${input.departureDate} at ${input.departureTime}
-
-        ${mandatoryStop}
-        ${specificIdeas}
-
-        CRITICAL ROUTING INSTRUCTIONS:
-        1. The trip MUST follow a logical geographic path starting from ${input.startPoint}.
-        2. THE FINAL DAY (Day ${totalDays}) MUST END AT "${endPoint}". 
-        3. The 'location' field for Day ${totalDays} in the JSON response must be "${endPoint}" or its immediate vicinity.
-
-        CRITICAL INSTRUCTION FOR TIMING:
-        1. Day 1: Activities must start AFTER ${input.arrivalTime}.
-        2. Final Day (Day ${totalDays}): The itinerary MUST end at ${endPoint} least 4 hours before ${input.departureTime} to allow for airport check-in. If the departure time is early (e.g., before 14:00), the final day should focus mostly on travel to the airport with minimal activities.
-
-        CRITICAL INSTRUCTION FOR COSTS:
-        You MUST break down costs into specific NUMBERS (USD) for each day:
-        1. accommodation: Hotel cost.
-        2. vehicleRental: Daily rental.
-        3. transportFuel: Fuel estimate based on distance.
-        4. guide: Daily fee (if selected).
-        5. tickets: Entrance fees.
-        6. food: Meals estimate.
-        7. miscellaneous: Tips, tolls.
-        
-        Route should be logical.
+    // ==========================================
+    // STEP 1: CREATE THE MASTER ROUTE
+    // ==========================================
+    const routePrompt = `
+        Plan a logical ${totalDays}-day travel route across Sri Lanka for a trip starting at "${input.startPoint}" and ending at "${input.endPoint || 'Flexible'}".
+        Include these mandatory stops if geographically logical: [${input.nextDestinations?.join(', ') || ''}].
+        ONLY return the City/Location name for each day. Do not generate activities or costs.
     `;
 
-    // Define Schema
-    const schema = {
+    const routeSchema = {
         type: Type.OBJECT,
         properties: {
             title: { type: Type.STRING },
             summary: { type: Type.STRING },
-            days: {
+            routePlan: {
                 type: Type.ARRAY,
                 items: {
                     type: Type.OBJECT,
-                    properties: DAY_SCHEMA_PROPERTIES,
-                    required: ['day', 'date', 'location', 'activities', 'detailedActivities', 'estimatedCost', 'accommodation', 'travelTime']
+                    properties: {
+                        day: { type: Type.NUMBER },
+                        location: { type: Type.STRING }
+                    },
+                    required: ['day', 'location']
                 }
-            },
-            estimatedTotalBudget: { type: Type.STRING }
+            }
         },
-        required: ['title', 'summary', 'days', 'estimatedTotalBudget']
+        required: ['title', 'summary', 'routePlan']
     };
 
-    // Execute Call
-    const response = await callWithRetry(async () => {
+    const routeResponse = await callWithRetry(async () => {
         return await ai.models.generateContent({
             model: MODEL_NAME,
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: schema
-            }
+            contents: [{ role: 'user', parts: [{ text: routePrompt }] }],
+            config: { responseMimeType: 'application/json', responseSchema: routeSchema, maxOutputTokens: 2000 }
         });
     });
 
-    // Parse Response
-    const jsonStr = cleanResponse(response);
-    return JSON.parse(jsonStr) as Itinerary;
-};
+    const masterRouteData = JSON.parse(cleanResponse(routeResponse));
+    const masterRoute = masterRouteData.routePlan; // උදා: [{day: 1, location: "Colombo"}, {day: 2, location: "Kandy"}...]
 
+    console.log("✅ Master Route එක සාර්ථකයි! දින අනුව විස්තර ජනනය ආරම්භ කරයි...");
+
+    // ==========================================
+    // STEP 2: CHUNKED DETAILED GENERATION
+    // ==========================================
+    const CHUNK_SIZE = 7; // දින 7න් 7ට AI එකෙන් ඉල්ලයි
+
+    let allDays: ItineraryDay[] = [];
+    let finalItinerary: Partial<Itinerary> = {
+        title: masterRouteData.title,
+        summary: masterRouteData.summary
+    };
+
+    let nextStartLocation = input.startPoint;
+    let visitedLocations: string[] = [input.startPoint];
+
+    // 🔥 NEW: Budget Tracking Variables
+    let remainingBudget = input.budget;
+    let globalIsBudgetSufficient = true;
+    let globalBudgetWarning = "";
+
+    // දවස් ගාණ අනුව Loop එක කරකැවීම
+    for (let startDay = 1; startDay <= totalDays; startDay += CHUNK_SIZE) {
+        const endDay = Math.min(startDay + CHUNK_SIZE - 1, totalDays);
+        const isFirstChunk = startDay === 1;
+        const isLastChunk = endDay === totalDays;
+
+        // 🔥 NEW: මෙම Chunk එක සඳහා පමණක් වෙන්කළ මුදල ගණනය කිරීම
+        const remainingDays = totalDays - startDay + 1;
+        const currentChunkDays = endDay - startDay + 1;
+        const chunkMaxBudget = Math.floor((remainingBudget / remainingDays) * currentChunkDays);
+        const chunkDailyBudget = Math.floor(chunkMaxBudget / currentChunkDays);
+
+        console.log(`⏳ AI Generate වෙමින් පවතී: Day ${startDay} සිට ${endDay} දක්වා... (Chunk Budget: $${chunkMaxBudget})`);
+
+        const chunkLocations = masterRoute.filter((d: any) => d.day >= startDay && d.day <= endDay);
+        const masterRouteString = chunkLocations.map((d: any) => `Day ${d.day}: ${d.location}`).join(", ");
+
+        // 1. Mandatory Stops Logic
+        const stopsList = input.nextDestinations && input.nextDestinations.length > 0 
+            ? input.nextDestinations.join(", ") 
+            : "";
+
+        const mandatoryStop = stopsList
+            ? `IMPORTANT REQUEST: The route MUST include at least one day/visit to each of these locations: [${stopsList}]. HOWEVER, you MUST ALSO suggest and add OTHER logical and beautiful destinations in Sri Lanka to fill the remaining days of the ${totalDays}-day trip. Do NOT restrict the entire itinerary to only these user-requested locations.`
+            : "Feel free to suggest the best logical route and destinations across Sri Lanka.";
+
+        // 2. User Notes Logic
+        const specificIdeas = input.userNotes
+            ? `USER SPECIFIC PREFERENCES/NOTES: "${input.userNotes}". You MUST prioritize incorporating these requests into the activities, style of travel, or food choices.`
+            : "";
+
+        // 3. END POINT LOGIC
+        const endLocationName = input.endPoint && input.endPoint.trim() !== '' 
+            ? input.endPoint 
+            : "Flexible / Linear Route (End at last activity)";
+
+        const endLocationInstruction = (isLastChunk && input.endPoint && input.endPoint.trim() !== '')
+            ? `THE FINAL DAY (Day ${endDay}) MUST END AT "${input.endPoint}".`
+            : `End Day ${endDay} at a logical location so the trip can continue tomorrow.`;
+
+        const timingInstruction = (isLastChunk && input.endPoint && input.endPoint.toLowerCase().includes('airport'))
+            ? `2. Final Day (Day ${endDay}): Since the drop-off is at the Airport, ensure arrival is at least 4 hours before flight time (${input.departureTime}).`
+            : ``;
+
+        const visitedInstruction = visitedLocations.length > 1
+            ? `CRITICAL AVOIDANCE RULE: You have ALREADY VISITED the following cities in the previous days: [${visitedLocations.join(", ")}]. YOU MUST NOT make these cities the main location or overnight stay again. Please route the journey to NEW regions and cities.`
+            : ``;
+
+        // 4. Prompt Construction
+        const prompt = `
+            Create a detailed ${totalDays}-day Sri Lanka trip for ${input.adults && input.children ? `${input.adults} adults and ${input.children} children` : input.adults ? `${input.adults} adults` : "1 adult"}.
+            
+            🚨 CRITICAL: YOU MUST ONLY GENERATE DETAILS FOR DAY ${startDay} TO DAY ${endDay}! Do not generate the entire trip.
+            
+            🔥 MASTER ROUTE TO FOLLOW FOR THESE DAYS:
+            ${masterRouteString}
+            (Please base your daily locations primarily on this approved route)
+
+            LOGISTICS:
+            - Start: ${nextStartLocation}  <-- THIS IS CRITICAL. START DAY ${startDay} FROM HERE!
+            - End: ${endLocationName}
+            - Vehicle: ${input.vehicleType}
+            - Guide: ${input.includeGuide ? "YES (Add ~$25/day)" : "NO"}
+            - Hotel Tier: ${input.hotelRating}
+            - Arrival: ${input.arrivalDate} at ${input.arrivalTime}
+            - Departure: ${input.departureDate} at ${input.departureTime}
+            
+            👉 Accommodation Preference: "${input.hotelRating}" 
+               - If "Homestay": Suggest highly-rated, safe homestays or guesthouses.
+               - If "Cabana": Suggest wooden cabanas, beach chalets, or jungle huts.
+               - If "Eco-Lodge": Suggest sustainable eco-lodges or glamping sites.
+               - If Star Rating: Suggest hotels matching that rating.
+
+            ${mandatoryStop}
+            ${specificIdeas}
+
+            CRITICAL ROUTING INSTRUCTIONS:
+            1. The trip MUST follow a logical geographic path starting from ${nextStartLocation}.
+            ${endLocationInstruction}
+            ${visitedInstruction}
+
+            CRITICAL INSTRUCTION FOR TIMING:
+            ${isFirstChunk ? `1. Day 1: Activities must start AFTER ${input.arrivalTime}.` : ''}
+            ${timingInstruction}
+
+            🔥 CRITICAL BUDGET EVALUATION & ACTIONS (STRICT MATH):
+            1. Your absolute MAXIMUM limit for THESE ${currentChunkDays} DAYS (Day ${startDay} to ${endDay}) is $${chunkMaxBudget} USD (approx $${chunkDailyBudget}/day).
+            2. THE MATH MUST WORK: The sum of all daily 'estimatedCost.total' values for THESE DAYS MUST BE strictly <= $${chunkMaxBudget}.
+            3. If $${chunkMaxBudget} is too low for the requested duration, Hotel Tier, or Vehicle Type:
+               - Set "isBudgetSufficient" to false.
+               - Write a "budgetWarningMessage" explaining that to stay under budget, you had to downgrade their preferences.
+               - YOU MUST OVERRIDE the user's Hotel Tier ("${input.hotelRating}") and Vehicle ("${input.vehicleType}") and use the absolute cheapest options (e.g., $5 hostels, public buses, $0 free activities, cheap street food).
+               - FORCE the numbers down. Do not output realistic high prices if they break the $${chunkMaxBudget} limit. You must fit the itinerary into the given budget.
+
+            🔥 EXTRA INSTRUCTION FOR SUGGESTIONS:
+            For every single day, populate the 'suggestions' array with 2-3 "Hidden Gems" or "Alternative Stops".
+            - These should be interesting places directly ON THE ROUTE for that day.
+            - They should NOT be in the main 'activities' list.
+            - Include an estimated cost and DURATION (e.g. "1 hour") for each suggestion.
+
+            CRITICAL INSTRUCTION FOR COSTS:
+            You MUST break down costs into specific NUMBERS (USD) for each day:
+            1. accommodation: Hotel cost based on tier.
+            2. vehicleRental: Daily rental.
+            3. transportFuel: Fuel estimate based on distance.
+            4. guide: Daily fee (if selected).
+            5. tickets: Entrance fees.
+            6. food: Meals estimate.
+            7. miscellaneous: Tips, tolls.
+            
+            Route should be logical.
+        `;
+
+        // 🔥 FIX: සෑම Chunk එකකදීම Budget Warning එක ඉල්ලීමට Schema එක වෙනස් කිරීම
+        const schema = {
+            type: Type.OBJECT,
+            properties: {
+                isBudgetSufficient: { type: Type.BOOLEAN },
+                budgetWarningMessage: { type: Type.STRING },
+                ...(isFirstChunk && {
+                    title: { type: Type.STRING },
+                    summary: { type: Type.STRING },
+                    estimatedTotalBudget: { type: Type.STRING }
+                }),
+                days: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: DAY_SCHEMA_PROPERTIES, 
+                        required: ['day', 'date', 'location', 'activities', 'detailedActivities', 'estimatedCost', 'accommodation', 'travelTime', 'suggestions']
+                    }
+                }
+            },
+            required: isFirstChunk ? ['title', 'summary', 'days', 'isBudgetSufficient'] : ['days', 'isBudgetSufficient']
+        };
+
+        // Execute Call
+        const response = await callWithRetry(async () => {
+            return await ai.models.generateContent({
+                model: MODEL_NAME,
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: schema,
+                    maxOutputTokens: 8192
+                }
+            });
+        });
+
+        // Parse Response
+        const jsonStr = cleanResponse(response);
+        let chunkData;
+        try {
+            chunkData = JSON.parse(jsonStr);
+        } catch (parseError) {
+            console.error(`🚨 JSON Parsing Failed at Chunk (Days ${startDay}-${endDay})! Raw String Length:`, jsonStr.length);
+            console.error("Raw String Snippet (Last 200 chars):", jsonStr.slice(-200));
+            throw new Error(`AI එක දින ${startDay}-${endDay} ජනනය කිරීමේදී දෝෂයක් ඇතිවිය. කරුණාකර නැවත උත්සාහ කරන්න.`);
+        }
+
+        // --- Data Accumulation (ලැබුණු දවස් ටික එකතු කිරීම) ---
+        if (chunkData.days && Array.isArray(chunkData.days)) {
+            allDays = [...allDays, ...chunkData.days];
+            
+            const newLocations = chunkData.days.map((d: any) => d.location);
+            visitedLocations = [...new Set([...visitedLocations, ...newLocations])]; 
+
+            // ඊළඟ Loop එකේ Start Location එක
+            if (chunkData.days.length > 0) {
+                nextStartLocation = chunkData.days[chunkData.days.length - 1].location;
+            }
+
+            // 🔥 NEW: මේ කොටසට වියදම් වූ මුදල මුළු මුදලෙන් අඩු කිරීම
+            const chunkSpent = chunkData.days.reduce((sum: number, day: any) => sum + (day.estimatedCost?.total || 0), 0);
+            remainingBudget -= chunkSpent;
+        }
+
+        // 🔥 NEW: Budget Warning එකක් ඇත්නම් එය Global ලෙස සටහන් කර ගැනීම
+        if (chunkData.isBudgetSufficient === false) {
+            globalIsBudgetSufficient = false;
+            if (chunkData.budgetWarningMessage) {
+                globalBudgetWarning = chunkData.budgetWarningMessage;
+            }
+        }
+
+        // පළමු කොටසේදී (First Chunk) ලැබෙන Title, Summary අරගෙන Final Object එකට දැමීම
+        if (isFirstChunk) {
+            finalItinerary.title = chunkData.title;
+            finalItinerary.summary = chunkData.summary;
+        }
+    }
+
+    // --- Final Data Construction ---
+    finalItinerary.days = allDays;
+
+    // 🔥 NEW: සම්පූර්ණ ගමනට අදාළ Budget Warnings යාවත්කාලීන කිරීම
+    finalItinerary.isBudgetSufficient = globalIsBudgetSufficient;
+    finalItinerary.budgetWarningMessage = globalBudgetWarning;
+
+    // සම්පූර්ණ දවස්වල වියදම නැවත එකතු කර Total Budget එක සැදීම
+    const calculatedTotal = allDays.reduce((sum, day) => sum + (day.estimatedCost?.total || 0), 0);
+    finalItinerary.estimatedTotalBudget = `$${calculatedTotal}`;
+
+    if (calculatedTotal > input.budget) {
+        finalItinerary.isBudgetSufficient = false;
+        finalItinerary.budgetWarningMessage = `ඔබ ලබාදුන් අයවැය ($${input.budget}) මෙම ගමනට ප්‍රමාණවත් නොවේ. ඇස්තමේන්තුගත සම්පූර්ණ වියදම $${calculatedTotal} කි. කරුණාකර දින ගණන, හෝටල් හෝ වාහන වර්ගය වෙනස් කර නැවත උත්සාහ කරන්න.`;
+    }
+    
+    return finalItinerary as Itinerary;
+};
 // --- REGENERATE SINGLE DAY FUNCTION ---
 
 export const regenerateSingleDay = async (
@@ -255,6 +455,7 @@ export const regenerateSingleDay = async (
 ): Promise<ItineraryDay> => {
     
     const currentDay = fullItinerary.days[dayIndex];
+    const dailyBudget = Math.floor(userInputs.budget / fullItinerary.days.length);
 
     const locationInstruction = newLocation 
         ? `CHANGE LOCATION to "${newLocation}". Ignore previous location.`
@@ -270,6 +471,14 @@ export const regenerateSingleDay = async (
         - Vehicle: ${userInputs.vehicleType}
         - Guide: ${userInputs.includeGuide}
         
+        🔥 CRITICAL BUDGET ACTIONS:
+        - Total Trip Budget Constraint: $${userInputs.budget} USD (~$${dailyBudget}/day).
+        - The estimated costs for THIS day MUST fit logically within the ~$${dailyBudget}/day limit.
+        - If the requested changes force the cost beyond reasonable limits, set "isDayBudgetSufficient" to false, and OVERRIDE user preferences with the absolute cheapest alternatives (public transport, free activities) to force the daily cost down.
+
+        🔥 SUGGESTIONS:
+        Also provide 2-3 new 'suggestions' (Hidden Gems/Alternative Stops) for this specific day/location.
+
         Ensure "estimatedCost" fields (accommodation, fuel, tickets, etc.) are calculated as NUMBERS (USD).
     `;
 
@@ -282,12 +491,21 @@ export const regenerateSingleDay = async (
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: DAY_SCHEMA_PROPERTIES,
-                    required: ['day', 'date', 'location', 'activities', 'detailedActivities', 'estimatedCost', 'accommodation']
-                }
+                    required: ['day', 'date', 'location', 'activities', 'detailedActivities', 'estimatedCost', 'accommodation', 'suggestions']
+                },
+                maxOutputTokens: 8192
             }
         });
     });
 
     const jsonStr = cleanResponse(response);
-    return JSON.parse(jsonStr) as ItineraryDay;
+    try {
+        return JSON.parse(jsonStr) as ItineraryDay;
+    } catch (parseError) {
+        // AI එක කොතනින්ද නතර වුණේ කියලා බලාගන්න අන්තිම අකුරු 200 ප්‍රින්ට් කරමු
+        console.error("🚨 JSON Parsing Failed! Raw String Length:", jsonStr.length);
+        console.error("Raw String Snippet (Last 200 chars):", jsonStr.slice(-200));
+        
+        throw new Error("AI එක සම්පූර්ණ නොවුණු පිළිතුරක් ලබා දුන්නා. කරුණාකර දවස් ගාණ අඩු කර නැවත උත්සාහ කරන්න.");
+    }
 };

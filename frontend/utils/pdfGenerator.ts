@@ -2,298 +2,420 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Itinerary, PlannerInput } from '../types';
 
-export const generatePDF = (itinerary: Itinerary, input: PlannerInput) => {
+// --- THEME & CONFIGURATION ---
+const theme = {
+  colors: {
+    primary: [5, 150, 105] as [number, number, number],
+    primaryLight: [236, 253, 245] as [number, number, number],
+    textMain: [17, 24, 39] as [number, number, number],
+    textLight: [107, 114, 128] as [number, number, number],
+    accent: [249, 115, 22] as [number, number, number],
+    border: [229, 231, 235] as [number, number, number],
+    
+    dayBadgeBg: [224, 242, 241] as [number, number, number],
+    dayBadgeText: [0, 105, 92] as [number, number, number],
+    tagBg: [243, 244, 246] as [number, number, number],
+    costBg: [249, 250, 251] as [number, number, number],
+    hotelBg: [240, 253, 244] as [number, number, number],
+    hotelText: [21, 128, 61] as [number, number, number],
+  },
+  fonts: {
+    header: 'helvetica',
+    body: 'helvetica'
+  }
+};
+
+// 🔥 FIX: Helper function to safely convert anything to a String
+const safeString = (value: any): string => {
+  if (!value) return "";
+  
+  // 1. දැනටමත් String එකක් නම් ඒකම යවන්න
+  if (typeof value === 'string') return value;
+  
+  // 2. Array එකක් නම් (Objects ගොඩක් නම්)
+  if (Array.isArray(value)) {
+    return value.map(item => {
+      if (typeof item === 'string') return item;
+      
+      if (typeof item === 'object' && item !== null) {
+        // Object එක ඇතුළේ තියෙන description එක හෝ activity එක හොයාගන්නවා
+        // (ඔයාගේ data වල තියෙන keys අනුව මේක වැඩ කරනවා)
+        return item.description || item.activity || item.name || Object.values(item).join(" - ");
+      }
+      return String(item);
+    }).join("\n"); // එකිනෙක වෙන්වෙලා ලස්සනට පේන්න නව පේළියක් (newline) දාමු
+  }
+  
+  // 3. තනි Object එකක් නම්
+  if (typeof value === 'object' && value !== null) {
+     return value.description || value.text || Object.values(value).join(" ");
+  }
+  
+  return String(value);
+};
+
+export const generatePDF = (itinerary: Itinerary, input: PlannerInput, activityOverrides?: Record<number, any[]>, hotelOverrides?: Record<number, any> ) => {
+  const planToPrint = JSON.parse(JSON.stringify(itinerary)); // Original එක වෙනස් නොවෙන්න Copy එකක් ගන්නවා
+
+    if (planToPrint.days) {
+        planToPrint.days = planToPrint.days.map((day: any, index: number) => {
+            const newDay = { ...day };
+            
+            // User Activities වෙනස් කරලා නම් ඒක Replace කරනවා
+            if (activityOverrides && activityOverrides[index]) {
+                newDay.activities = activityOverrides[index];
+            }
+            
+            // User Hotels වෙනස් කරලා නම් ඒක Replace කරනවා
+            if (hotelOverrides && hotelOverrides[index]) {
+                newDay.accommodation = hotelOverrides[index];
+            }
+
+            return newDay;
+        });
+    }
+    
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
   const margin = 14;
-  let yPos = 20;
+  let yPos = 0;
 
-  // --- HELPER: ADD SECTION TITLE ---
-  const addSectionTitle = (title: string) => {
-    if (yPos > 270) {
-        doc.addPage();
-        yPos = 20;
-    }
-    doc.setFontSize(14);
-    doc.setTextColor(0, 102, 102); // Emerald Color
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, margin, yPos);
-    yPos += 8;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, yPos - 2, pageWidth - margin, yPos - 2);
-    yPos += 5;
-    doc.setTextColor(0, 0, 0); // Reset color
-    doc.setFont('helvetica', 'normal');
+  // --- HELPERS ---
+  const drawSidebar = () => {
+    doc.setFillColor(0, 66, 49);
+    doc.rect(0, 0, 60, pageHeight, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont(theme.fonts.header, 'bold');
+    doc.context2d.save();
+    doc.context2d.translate(40, pageHeight - 40);
+    doc.context2d.rotate(-Math.PI / 2);
+    doc.text("LANKAVIBE PLANNER", 0, 0);
+    doc.context2d.restore();
   };
 
-  // --- HELPER: CHECK PAGE BREAK ---
-  const checkPageBreak = (height: number) => {
-    if (yPos + height > 280) {
+  const addPageHeader = (pageNumber: number) => {
+    doc.setFillColor(0, 66, 49);
+    doc.rect(0, 0, pageWidth, 15, 'F');
+    
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont(theme.fonts.header, 'bold');
+    doc.text("Trip Itinerary", margin, 10);
+    doc.setFont(theme.fonts.body, 'normal');
+    doc.text(`Page ${pageNumber}`, pageWidth - margin, 10, { align: 'right' });
+  };
+
+  const addFooter = () => {
+    const str = `Generated by LankaVibe AI | ${new Date().toLocaleDateString()}`;
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(str, pageWidth / 2, pageHeight - 8, { align: 'center' });
+  };
+
+  const checkPageBreak = (neededHeight: number) => {
+    if (yPos + neededHeight > pageHeight - 15) {
       doc.addPage();
-      yPos = 20;
+      const pageCount = doc.getNumberOfPages();
+      addPageHeader(pageCount);
+      addFooter();
+      yPos = 25;
       return true;
     }
     return false;
   };
 
+  // --- CARD DRAWING FUNCTION ---
+  const drawDayCard = (day: any, index: number) => {
+    const cardWidth = pageWidth - (margin * 2);
+    const contentX = margin + 35; 
+
+    // 🔥 FIX: Ensure descText is ALWAYS a string before splitting
+    let rawDesc = day.detailedActivities || day.description || "Explore and enjoy the sights of this beautiful location.";
+    const descText = safeString(rawDesc);
+    
+    const descLines = doc.splitTextToSize(descText, cardWidth - 45);
+    const descHeight = descLines.length * 5;
+
+    const activities = Array.isArray(day.activities) ? day.activities : [];
+    let tempTagX = contentX;
+    let tagLines = 1;
+    doc.setFontSize(8);
+    doc.setFont(theme.fonts.header, 'bold');
+    activities.forEach((act: any) => {
+      const text = safeString(typeof act === 'string' ? act : act.name);
+      const textWidth = doc.getTextWidth(text) + 6;
+      if (tempTagX + textWidth > pageWidth - margin - 5) {
+        tempTagX = contentX;
+        tagLines++;
+      }
+      tempTagX += textWidth + 2;
+    });
+    const tagsHeight = tagLines * 8;
+
+    const costBoxHeight = 18;
+    const hotelBoxHeight = day.accommodation ? 24 : 0;
+    
+    const cardHeight = 15 + descHeight + tagsHeight + costBoxHeight + hotelBoxHeight + 15;
+
+    checkPageBreak(cardHeight + 5);
+    const actualY = yPos; 
+
+    // Background
+    doc.setDrawColor(230, 230, 230);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(margin, actualY, cardWidth, cardHeight, 3, 3, 'FD');
+
+    // Badge
+    doc.setFillColor(...theme.colors.dayBadgeBg);
+    doc.roundedRect(margin + 5, actualY + 5, 25, 30, 2, 2, 'F');
+    doc.setTextColor(...theme.colors.dayBadgeText);
+    doc.setFontSize(8);
+    doc.text(`DAY ${day.day}`, margin + 17.5, actualY + 15, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text(`${index + 1}`, margin + 17.5, actualY + 25, { align: 'center' });
+
+    // Location
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.setFont(theme.fonts.header, 'bold');
+    doc.text(safeString(day.location), contentX, actualY + 12);
+
+    // Description
+    let contentY = actualY + 18;
+    doc.setTextColor(...theme.colors.textLight);
+    doc.setFontSize(9);
+    doc.setFont(theme.fonts.body, 'normal');
+    doc.text(descLines, contentX, contentY);
+    contentY += descHeight + 2;
+
+    // Tags
+    let tagX = contentX;
+    doc.setFontSize(8);
+    doc.setFont(theme.fonts.header, 'bold');
+    
+    activities.forEach((act: any) => {
+      const text = safeString(typeof act === 'string' ? act : act.name);
+      const textWidth = doc.getTextWidth(text) + 6;
+      
+      if (tagX + textWidth > pageWidth - margin - 5) {
+        tagX = contentX;
+        contentY += 8;
+      }
+
+      doc.setFillColor(...theme.colors.tagBg);
+      doc.roundedRect(tagX, contentY - 5, textWidth, 6, 2, 2, 'F');
+      doc.setTextColor(...theme.colors.textLight);
+      doc.text(text, tagX + 3, contentY - 0.5);
+      
+      tagX += textWidth + 2;
+    });
+
+    contentY += 8; 
+
+    // Cost Grid
+    doc.setFillColor(...theme.colors.costBg);
+    doc.setDrawColor(230, 230, 230);
+    doc.roundedRect(contentX, contentY, cardWidth - 40, costBoxHeight, 2, 2, 'FD');
+
+    const colWidth = (cardWidth - 40) / 4;
+    const costY = contentY + 6;
+    const valY = contentY + 14;
+
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.setFont(theme.fonts.header, 'bold');
+
+    doc.text("TRANSPORT", contentX + 5, costY);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`$${day.estimatedCost?.transportFuel || 0}`, contentX + 5, valY);
+
+    doc.setTextColor(150, 150, 150);
+    doc.text("HOTEL", contentX + colWidth + 5, costY);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`$${day.estimatedCost?.accommodation || 0}`, contentX + colWidth + 5, valY);
+
+    doc.setTextColor(150, 150, 150);
+    doc.text("TICKETS", contentX + (colWidth * 2) + 5, costY);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`$${day.estimatedCost?.tickets || 0}`, contentX + (colWidth * 2) + 5, valY);
+
+    doc.setTextColor(...theme.colors.dayBadgeText);
+    doc.setFontSize(9);
+    const dayTotal = (day.estimatedCost?.transportFuel || 0) + (day.estimatedCost?.accommodation || 0) + (day.estimatedCost?.tickets || 0);
+    doc.text(`$${dayTotal}`, contentX + (colWidth * 3) + 10, valY - 2);
+    
+    doc.setDrawColor(220, 220, 220);
+    doc.line(contentX + colWidth, contentY + 3, contentX + colWidth, contentY + costBoxHeight - 3);
+    doc.line(contentX + (colWidth * 2), contentY + 3, contentX + (colWidth * 2), contentY + costBoxHeight - 3);
+
+    contentY += costBoxHeight + 5;
+
+    // Accommodation
+    if (day.accommodation) {
+        doc.setFillColor(...theme.colors.hotelBg);
+        doc.setDrawColor(187, 247, 208);
+        doc.roundedRect(contentX, contentY, cardWidth - 40, 20, 2, 2, 'FD');
+
+        doc.setFillColor(...theme.colors.hotelText);
+        doc.roundedRect(contentX + 5, contentY + 5, 25, 10, 1, 1, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7);
+        doc.text("STAY", contentX + 17.5, contentY + 11.5, { align: 'center' });
+
+        doc.setTextColor(...theme.colors.hotelText);
+        doc.setFontSize(9);
+        doc.setFont(theme.fonts.header, 'bold');
+        
+        let hotelName = safeString(typeof day.accommodation === 'string' ? day.accommodation : day.accommodation.name);
+        if(hotelName.length > 40) hotelName = hotelName.substring(0, 40) + '...';
+        
+        doc.text(hotelName, contentX + 35, contentY + 12);
+    }
+
+    yPos = actualY + cardHeight + 8;
+  };
+
   // ==========================================
-  // 1. HEADER & TRIP SUMMARY
+  // 1. COVER PAGE
   // ==========================================
-  doc.setFontSize(20); // Slightly smaller for safety
-doc.setTextColor(0, 102, 102);
-doc.setFont('helvetica', 'bold');
-
-const titleText = itinerary.title || "Your Sri Lanka Journey";
-
-// Wrap title within page width
-const titleLines = doc.splitTextToSize(
-  titleText,
-  pageWidth - margin * 2
-);
-
-// Center each line
-titleLines.forEach((line: string, index: number) => {
-  doc.text(line, pageWidth / 2, yPos + index * 10, { align: 'center' });
-});
-
-// Move Y position correctly
-yPos += titleLines.length * 10 + 5;
+  drawSidebar();
   
-  yPos += 10;
-  doc.setFontSize(10);
+  const contentStart = 75;
+  yPos = 80;
+
+  doc.setTextColor(0, 66, 49);
+  doc.setFontSize(36);
+  doc.setFont(theme.fonts.header, 'bold');
+  
+  // 🔥 FIX: Ensure Title is a string
+  const titleText = safeString(itinerary.title || "SRI LANKA JOURNEY");
+  const titleLines = doc.splitTextToSize(titleText, 120);
+  doc.text(titleLines, contentStart, yPos);
+  
+  yPos += (titleLines.length * 14) + 10;
+
+  doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
-  doc.setFont('helvetica', 'italic');
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, pageWidth / 2, yPos, { align: 'center' });
-  
+  doc.setFont(theme.fonts.body, 'normal');
+  doc.text(`${input.adults} Adults${input.children > 0 ? `, ${input.children} Children` : ''}`, contentStart, yPos);
+  yPos += 8;
+  doc.text(`${input.arrivalDate}  -  ${input.departureDate}`, contentStart, yPos);
+
   yPos += 15;
+  doc.setDrawColor(249, 115, 22);
+  doc.setLineWidth(1.5);
+  doc.line(contentStart, yPos, contentStart + 40, yPos);
 
-  // Trip Summary Box
-  doc.setFillColor(245, 250, 248); // Light Emerald bg
-  doc.roundedRect(margin, yPos, pageWidth - (margin * 2), 25, 3, 3, 'F');
+  yPos += 15;
   
-  doc.setFontSize(10);
-  doc.setTextColor(60, 60, 60);
-  doc.setFont('helvetica', 'normal');
-  const summaryLines = doc.splitTextToSize(itinerary.summary || "", pageWidth - (margin * 2) - 10);
-  doc.text(summaryLines, margin + 5, yPos + 7);
-  yPos += 35;
+  doc.setFontSize(11);
+  doc.setTextColor(80, 80, 80);
+  
+  // 🔥 FIX: Ensure Summary is a string
+  const summaryText = safeString(itinerary.summary || "");
+  const summaryLines = doc.splitTextToSize(summaryText, 115);
+  doc.text(summaryLines, contentStart, yPos);
 
   // ==========================================
-  // 2. LOGISTICS & PREFERENCES
+  // 2. OVERVIEW PAGE
   // ==========================================
-  addSectionTitle("Trip Parameters");
+  doc.addPage();
+  addPageHeader(2);
+  addFooter();
+  yPos = 30;
 
-  const logisticsData = [
-    ['Arrival', `${input.arrivalDate} @ ${input.arrivalTime}`],
-    ['Departure', `${input.departureDate} @ ${input.departureTime || 'TBD'}`],
-    ['Start Point', input.startPoint.split(',')[0]],
-    ['Travelers', `${input.adults} Adults${input.children > 0 ? `, ${input.children} Children` : ''}`],
-    ['Vehicle', input.vehicleType],
-    ['Trip Pace', input.pace || 'Moderate'],
+  doc.setFontSize(18);
+  doc.setTextColor(...theme.colors.primary);
+  doc.setFont(theme.fonts.header, 'bold');
+  doc.text("Trip Overview", margin, yPos);
+  yPos += 12;
+
+  const overviewData = [
+    ['Travelers', `${input.adults} Adults, ${input.children} Children`],
+    ['Duration', `${itinerary.days?.length || 0} Days`],
+    ['Vehicle', safeString(input.vehicleType)],
     ['Hotel Tier', `${input.hotelRating} Star`],
-    ['Guide', input.includeGuide ? "Included" : "Self-Guided"],
-    ['Interests', input.interests.length > 0 ? input.interests.join(', ') : 'General'],
-    ['Budget Limit', `$${input.budget} USD`]
+    ['Estimated Budget', `$${input.budget} USD`]
   ];
-
-  // Add User Notes if they exist
-  if (input.userNotes) {
-    logisticsData.push(['Special Requests', input.userNotes]);
-  }
-  // Add Mandatory Stop if exists
-  if (input.nextDestination) {
-    logisticsData.push(['Must Visit', input.nextDestination]);
-  }
 
   autoTable(doc, {
     startY: yPos,
-    head: [],
-    body: logisticsData,
+    body: overviewData,
     theme: 'grid',
-    styles: { fontSize: 10, cellPadding: 3, overflow: 'linebreak' },
+    styles: { fontSize: 11, cellPadding: 6 },
     columnStyles: {
-      0: { fontStyle: 'bold', fillColor: [240, 240, 240], cellWidth: 40 },
-      1: { cellWidth: 'auto' }
+      0: { fontStyle: 'bold', textColor: theme.colors.primary, cellWidth: 50 },
+      1: { textColor: theme.colors.textMain }
     },
-    margin: { left: margin, right: margin }
+    headStyles: { fillColor: theme.colors.primary }
   });
 
   yPos = (doc as any).lastAutoTable.finalY + 15;
 
-  // ==========================================
-  // 3. DAILY ITINERARY
-  // ==========================================
-  addSectionTitle("Daily Itinerary Details");
-
-  itinerary.days.forEach((day, index) => {
-    checkPageBreak(65); // Check for enough space for a day block
-
-    // Day Header
-    doc.setFillColor(0, 102, 102); // Dark Emerald
-    doc.rect(margin, yPos, pageWidth - (margin * 2), 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Day ${day.day}: ${day.location} (${day.date})`, margin + 3, yPos + 5.5);
-    
-    yPos += 14;
-    doc.setTextColor(0, 0, 0);
-
-    const dayDescription = (day as any).description || (day as any).summary; 
-    
-    if (dayDescription) {
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(60, 60, 60); // Dark Gray
-
-        const descLines = doc.splitTextToSize(dayDescription, pageWidth - (margin * 2));
-        
-        // Check if description fits, otherwise page break
-        if (checkPageBreak(descLines.length * 5)) {
-             yPos += 5; // Add top padding if new page
-        }
-
-        doc.text(descLines, margin, yPos);
-        yPos += (descLines.length * 5) + 8; // Add space after description
-
-        // Reset Styles
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0); 
+  let totalCost = 0;
+  itinerary.days?.forEach(d => {
+    totalCost += (d.estimatedCost?.total || 0);
+    if (!d.estimatedCost?.total) {
+        totalCost += (d.estimatedCost?.accommodation || 0) + (d.estimatedCost?.transportFuel || 0) + (d.estimatedCost?.tickets || 0) + (d.estimatedCost?.food || 0);
     }
+  });
 
-    // Accommodation & Travel Info
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Accommodation:`, margin, yPos);
-    doc.setFont('helvetica', 'normal');
-    // Handle accommodation object or string
-    const accomName = typeof day.accommodation === 'string' 
-        ? day.accommodation 
-        : (day.accommodation?.name || 'Standard Hotel');
-    doc.text(accomName, margin + 35, yPos);
-    
-    yPos += 6;
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Travel Time:`, margin, yPos);
-    doc.setFont('helvetica', 'normal');
-    doc.text(day.travelTime || 'N/A', margin + 35, yPos);
-    
-    yPos += 10;
+  doc.setFillColor(...theme.colors.hotelBg);
+  doc.setDrawColor(187, 247, 208);
+  doc.roundedRect(margin, yPos, pageWidth - (margin * 2), 25, 3, 3, 'FD');
+  
+  doc.setFontSize(12);
+  doc.setTextColor(...theme.colors.hotelText);
+  doc.text("Total Estimated Trip Cost", margin + 15, yPos + 15);
+  
+  doc.setFontSize(16);
+  doc.setFont(theme.fonts.header, 'bold');
+  doc.text(`$${totalCost.toLocaleString()}`, pageWidth - margin - 15, yPos + 16, { align: 'right' });
 
-    // Activities List
-    doc.setFont('helvetica', 'bold');
-    doc.text("Highlights & Schedule:", margin, yPos);
-    yPos += 6;
-    
-    doc.setFont('helvetica', 'normal');
-    const activityLines: string[] = [];
+  // ==========================================
+  // 3. DAILY ITINERARY (CARD STYLE)
+  // ==========================================
+  doc.addPage();
+  addPageHeader(3);
+  addFooter();
+  yPos = 30;
 
-    // Prioritize detailed timeline if available
-    if (day.detailedActivities) {
-        if (day.detailedActivities.morning) activityLines.push(`[Morning] ${day.detailedActivities.morning}`);
-        if (day.detailedActivities.afternoon) activityLines.push(`[Afternoon] ${day.detailedActivities.afternoon}`);
-        if (day.detailedActivities.evening) activityLines.push(`[Evening] ${day.detailedActivities.evening}`);
-    } else {
-        // Fallback to simple list
-        day.activities.forEach(act => activityLines.push(`• ${act}`));
-    }
+  doc.setFontSize(18);
+  doc.setTextColor(...theme.colors.primary);
+  doc.text("Daily Itinerary", margin, yPos);
+  yPos += 15;
 
-    activityLines.forEach(line => {
-        const splitLine = doc.splitTextToSize(line, pageWidth - (margin * 2));
-        if (checkPageBreak(splitLine.length * 5)) {
-             yPos += 5; 
-        }
-        doc.text(splitLine, margin + 5, yPos);
-        yPos += (splitLine.length * 5) + 1; // Slight padding between items
-    });
-
-    yPos += 5;
-
-    // Daily Cost Table
-    const dailyCostData = [
-        ['Accommodation', `$${day.estimatedCost?.accommodation || 0}`],
-        ['Transport/Fuel', `$${day.estimatedCost?.transportFuel || 0}`],
-        ['Tickets/Entry', `$${day.estimatedCost?.tickets || 0}`],
-        ['Food/Meals', `$${day.estimatedCost?.food || 0}`],
-        ['Guide/Misc', `$${(day.estimatedCost?.guide || 0) + (day.estimatedCost?.miscellaneous || 0)}`],
-        ['Total Day Cost', `$${Object.values(day.estimatedCost || {}).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0)}`]
-    ];
-
-    autoTable(doc, {
-        startY: yPos,
-        head: [['Item', 'Est. Cost (USD)']],
-        body: dailyCostData,
-        theme: 'plain',
-        styles: { fontSize: 8, cellPadding: 1.5 },
-        headStyles: { fillColor: [220, 220, 220], textColor: 50, fontStyle: 'bold' },
-        columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 30, halign: 'right' } },
-        margin: { left: margin + 5 }
-    });
-
-    yPos = (doc as any).lastAutoTable.finalY + 15;
+  itinerary.days?.forEach((day, index) => {
+    drawDayCard(day, index);
   });
 
   // ==========================================
-  // 4. FINANCIAL SUMMARY
+  // 4. THANK YOU PAGE
   // ==========================================
-  addSectionTitle("Financial Breakdown");
+  doc.addPage();
+  doc.setFillColor(...theme.colors.primaryLight);
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+  
+  doc.setDrawColor(...theme.colors.primary);
+  doc.setLineWidth(2);
+  doc.rect(15, 15, pageWidth - 30, pageHeight - 30);
 
-  const totals = {
-    accommodation: 0,
-    transport: 0,
-    tickets: 0,
-    food: 0,
-    misc: 0,
-    guide: 0
-  };
+  const centerX = pageWidth / 2;
+  const centerY = pageHeight / 2;
 
-  itinerary.days.forEach(d => {
-    totals.accommodation += d.estimatedCost?.accommodation || 0;
-    totals.transport += (d.estimatedCost?.transportFuel || 0) + (d.estimatedCost?.vehicleRental || 0);
-    totals.tickets += d.estimatedCost?.tickets || 0;
-    totals.food += d.estimatedCost?.food || 0;
-    totals.misc += d.estimatedCost?.miscellaneous || 0;
-    totals.guide += d.estimatedCost?.guide || 0;
-  });
-
-  const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
-
-  const summaryData = [
-    ['Hotels & Accommodation', `$${totals.accommodation}`],
-    ['Transport (Vehicle + Fuel)', `$${totals.transport}`],
-    ['Entry Tickets & Activities', `$${totals.tickets}`],
-    ['Food & Dining', `$${totals.food}`],
-    ['Guide Fees', `$${totals.guide}`],
-    ['Miscellaneous', `$${totals.misc}`],
-    ['ESTIMATED GRAND TOTAL', `$${grandTotal} USD`]
-  ];
-
-  autoTable(doc, {
-    startY: yPos,
-    head: [['Category', 'Amount (USD)']],
-    body: summaryData,
-    theme: 'striped',
-    styles: { fontSize: 11, cellPadding: 4 },
-    headStyles: { fillColor: [0, 102, 102], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 
-        0: { cellWidth: 130 }, 
-        1: { cellWidth: 'auto', halign: 'right', fontStyle: 'bold' } 
-    },
-    didParseCell: function(data) {
-        if (data.row.index === summaryData.length - 1) {
-            data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fillColor = [220, 255, 240];
-        }
-    },
-    margin: { left: margin, right: margin }
-  });
-
-  // Footer
-  const finalY = (doc as any).lastAutoTable.finalY + 15;
-  doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
-  doc.text("Disclaimer: Prices are estimates based on standard rates. Actual costs may vary.", margin, finalY);
+  doc.setTextColor(...theme.colors.primary);
+  doc.setFontSize(36);
+  doc.setFont(theme.fonts.header, 'bold');
+  doc.text("THANK YOU", centerX, centerY - 15, { align: 'center' });
+  
+  doc.setFontSize(12);
+  doc.setTextColor(100, 100, 100);
+  doc.setFont(theme.fonts.body, 'normal');
+  doc.text("We hope you enjoy your Sri Lankan Adventure!", centerX, centerY + 5, { align: 'center' });
 
   // Save
-  doc.save(`SriLanka_Trip_${input.adults}Adults${input.children > 0 ? `,${input.children}Children` : ''}_${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`SriLanka_Trip_${new Date().toISOString().split('T')[0]}.pdf`);
 };

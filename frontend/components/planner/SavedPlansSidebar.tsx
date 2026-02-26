@@ -153,7 +153,7 @@ const SavedPlansSidebar: React.FC<SavedPlansSidebarProps> = ({
                         savedPlans.map((plan) => (
                             <div
                                 key={plan._id || plan.shareId}
-                                onClick={() => loadSavedPlan({ ...plan.itineraryData, _id: plan._id })}
+                                onClick={() => loadSavedPlan(plan)}
                                 className="group relative bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-emerald-200 cursor-pointer transition-all"
                             >
                                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-l-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>

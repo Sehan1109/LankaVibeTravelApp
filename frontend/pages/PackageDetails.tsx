@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Loader2, FileDown, Hotel, BedDouble, Star, MapPin, Calendar } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas'; // Import html2canvas
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import ReviewSection from '../components/Review/ReviewSection';
 import ReviewList, { Review } from '../components/Review/ReviewList';
 import ReviewModal from '../components/Review/ReviewModal';
