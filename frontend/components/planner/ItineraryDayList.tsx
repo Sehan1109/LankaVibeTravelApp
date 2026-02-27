@@ -85,7 +85,7 @@ const HotelSection = ({ day, onSelectHotel }: { day: any, onSelectHotel: (hotel:
                                     View Deal <ExternalLink className="w-3 h-3" />
                                 </a>
                             ) : <div></div>}
-                            <div className="text-sm font-bold text-gray-900">${selectedHotel.price || selectedHotel.estimatedCost || 0}<span className="text-xs font-normal text-gray-400">/night</span></div>
+                            <div className="text-sm font-bold text-gray-900">${selectedHotel.price || selectedHotel.estimatedCost || day.estimatedCost?.accommodation || 0}<span className="text-xs font-normal text-gray-400">/night</span></div>
                         </div>
                     </div>
                 </div>

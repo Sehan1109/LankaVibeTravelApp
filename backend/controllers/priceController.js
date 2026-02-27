@@ -41,52 +41,52 @@ const writeCache = (data) => {
 // HELPER FUNCTIONS (API Calls)
 // ---------------------------------------------------------
 
-// Helper to wrap SerpApi
-// const fetchSerpApi = (params) => {
-//     return new Promise((resolve, reject) => {
-//         const cacheKey = `${params.engine}_${params.q}`;
+//Helper to wrap SerpApi
+const fetchSerpApi = (params) => {
+    return new Promise((resolve, reject) => {
+        const cacheKey = `${params.engine}_${params.q}`;
 
-//         // B. CACHE CHECK කිරීම
-//         const cache = readCache();
-//         const CACHE_DURATION = 30 * 24 * 60 * 60 * 1000;
+        // B. CACHE CHECK කිරීම
+        const cache = readCache();
+        const CACHE_DURATION = 30 * 24 * 60 * 60 * 1000;
 
-//         if (cache[cacheKey]) {
-//             const cachedItem = cache[cacheKey];
-//             const now = Date.now();
+        if (cache[cacheKey]) {
+            const cachedItem = cache[cacheKey];
+            const now = Date.now();
 
-//             if (cachedItem.timestamp && (now - cachedItem.timestamp < CACHE_DURATION)) {
-//                 console.log(`⚡ Serving from CACHE (Valid): ${params.q.substring(0, 30)}...`);
-//                 return resolve(cachedItem.data); // data object එක විතරක් යවනවා
-//             } else {
-//                 console.log(`⌛ Cache Expired for: ${params.q.substring(0, 30)}...`);
-//                 // මාසයකට වඩා පරණ නම් අලුතෙන් API call එක ගනී
-//             }
-//         }
+            if (cachedItem.timestamp && (now - cachedItem.timestamp < CACHE_DURATION)) {
+                console.log(`⚡ Serving from CACHE (Valid): ${params.q.substring(0, 30)}...`);
+                return resolve(cachedItem.data); // data object එක විතරක් යවනවා
+            } else {
+                console.log(`⌛ Cache Expired for: ${params.q.substring(0, 30)}...`);
+                // මාසයකට වඩා පරණ නම් අලුතෙන් API call එක ගනී
+            }
+        }
 
-//         console.log(`🌐 Calling SERP API: ${params.q.substring(0, 30)}...`);
+        console.log(`🌐 Calling SERP API: ${params.q.substring(0, 30)}...`);
 
-//         // C. API CALL එක ගැනීම (Cache එකේ නැත්නම් විතරයි)
-//         if (!SERP_API_KEY) {
-//             return reject("No API Key Provided");
-//         }
+        // C. API CALL එක ගැනීම (Cache එකේ නැත්නම් විතරයි)
+        if (!SERP_API_KEY) {
+            return reject("No API Key Provided");
+        }
 
-//         getJson({ ...params, api_key: SERP_API_KEY }, (json) => {
-//             if (json.error) {
-//                 console.error("⚠️ API Error:", json.error);
-//                 // Error ආවොත් Cache කරන්නේ නෑ, නිකන්ම reject කරනවා
-//                 reject(json.error);
-//             } else {
-//                 // D. SUCCESS නම් CACHE එකට SAVE කිරීම
-//                 cache[cacheKey] = {
-//                     data: json,
-//                     timestamp: Date.now()
-//                 };
-//                 writeCache(cache); // ෆයිල් එකට ලියනවා
-//                 resolve(json);
-//             }
-//         });
-//     });
-// };
+        getJson({ ...params, api_key: SERP_API_KEY }, (json) => {
+            if (json.error) {
+                console.error("⚠️ API Error:", json.error);
+                // Error ආවොත් Cache කරන්නේ නෑ, නිකන්ම reject කරනවා
+                reject(json.error);
+            } else {
+                // D. SUCCESS නම් CACHE එකට SAVE කිරීම
+                cache[cacheKey] = {
+                    data: json,
+                    timestamp: Date.now()
+                };
+                writeCache(cache); // ෆයිල් එකට ලියනවා
+                resolve(json);
+            }
+        });
+    });
+};
 
 
 
@@ -96,43 +96,43 @@ const writeCache = (data) => {
 
 // 🔥 DEVELOPMENT MODE: Real SerpApi එක වෙනුවට මේ Fake Function එක පාවිච්චි කරන්න.
 // මෙය සැබෑ API call එකක් ගන්නේ නැත, නමුත් code එක වැඩ කිරීමට අවශ්‍ය බොරු data එවයි.
-const fetchSerpApi = (params) => {
-    return new Promise((resolve) => {
-        console.log(`⚠️ DEV MODE: Mocking API for ${params.engine} | Query: ${params.q}`);
+// const fetchSerpApi = (params) => {
+//     return new Promise((resolve) => {
+//         console.log(`⚠️ DEV MODE: Mocking API for ${params.engine} | Query: ${params.q}`);
 
-        // 1. HOTELS Mock Data
-        if (params.engine === "google_hotels") {
-            resolve({
-                properties: [
-                    {
-                        name: "Mock Hotel 1 (Dev Mode)",
-                        rate_per_night: { lowest: "$50" },
-                        overall_rating: 4.5,
-                        images: [{ thumbnail: "https://via.placeholder.com/150" }],
-                        description: "This is a fake hotel for testing.",
-                        link: "#"
-                    },
-                    {
-                        name: "Mock Hotel 2 (Dev Mode)",
-                        rate_per_night: { lowest: "$75" },
-                        overall_rating: 4.0,
-                        images: [{ thumbnail: "https://via.placeholder.com/150" }],
-                        description: "Another fake hotel.",
-                        link: "#"
-                    }
-                ]
-            });
-        }
+//         // 1. HOTELS Mock Data
+//         if (params.engine === "google_hotels") {
+//             resolve({
+//                 properties: [
+//                     {
+//                         name: "Mock Hotel 1 (Dev Mode)",
+//                         rate_per_night: { lowest: "$50" },
+//                         overall_rating: 4.5,
+//                         images: [{ thumbnail: "https://via.placeholder.com/150" }],
+//                         description: "This is a fake hotel for testing.",
+//                         link: "#"
+//                     },
+//                     {
+//                         name: "Mock Hotel 2 (Dev Mode)",
+//                         rate_per_night: { lowest: "$75" },
+//                         overall_rating: 4.0,
+//                         images: [{ thumbnail: "https://via.placeholder.com/150" }],
+//                         description: "Another fake hotel.",
+//                         link: "#"
+//                     }
+//                 ]
+//             });
+//         }
 
-        // 2. TICKETS / GENERAL Mock Data
-        else {
-            resolve({
-                answer_box: { price: "$15" }, // ටිකට් එකකට $15 වගේ බොරු ගාණක්
-                knowledge_graph: { ticket_admission: "$20" }
-            });
-        }
-    });
-};
+//         // 2. TICKETS / GENERAL Mock Data
+//         else {
+//             resolve({
+//                 answer_box: { price: "$15" }, // ටිකට් එකකට $15 වගේ බොරු ගාණක්
+//                 knowledge_graph: { ticket_admission: "$20" }
+//             });
+//         }
+//     });
+// };
 
 // 1. Transport Cost Calculation (Updated for Vehicle Type)
 const getRealTransportCost = async (origin, destination, vehicleType = 'Car') => {
@@ -171,7 +171,7 @@ const getRealTransportCost = async (origin, destination, vehicleType = 'Car') =>
 };
 
 // 2. Hotel Price Calculation (Updated for Star Rating Logic)
-const getHotelOptions = async (location, checkInDate, starRating) => {
+const getHotelOptions = async (location, checkInDate, starRating, travelers) => {
     try {
         // 1. Check-In Date
         const startDate = checkInDate ? new Date(checkInDate) : new Date();
@@ -195,7 +195,7 @@ const getHotelOptions = async (location, checkInDate, starRating) => {
             check_in_date: formattedCheckIn,
             check_out_date: formattedCheckOut,
             currency: "USD",
-            adults: "2",
+            adults: travelers ? travelers.toString() : "2",
             gl: "us",
             hl: "en",
             sort_by: "8"
@@ -305,7 +305,8 @@ export const refreshItineraryPrices = async (req, res) => {
                 hotelData = await getHotelOptions(
                     day.location,
                     day.date,
-                    input.hotelRating
+                    input.hotelRating,
+                    input.travelers
                 );
 
                 finalHotelPrice = hotelData.selectedPrice;
