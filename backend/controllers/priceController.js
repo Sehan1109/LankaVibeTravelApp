@@ -196,7 +196,7 @@ const getHotelOptions = async (location, checkInDate, starRating, travelers) => 
             check_out_date: formattedCheckOut,
             currency: "USD",
             adults: travelers ? travelers.toString() : "2",
-            gl: "us",
+            gl: "lk",
             hl: "en",
             sort_by: "8"
         });
