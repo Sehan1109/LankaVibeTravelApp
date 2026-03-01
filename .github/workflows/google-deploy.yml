@@ -47,14 +47,6 @@ jobs:
           npm run build
 
       # --------------------------------------------------
-      # Prepare Backend (production deps only)
-      # --------------------------------------------------
-      - name: Prepare Backend
-        working-directory: backend
-        run: |
-          npm ci --only=production || npm install --no-audit --prefer-offline
-
-      # --------------------------------------------------
       # Validate SSH secret
       # --------------------------------------------------
       - name: Validate SSH private key secret
@@ -154,9 +146,9 @@ jobs:
             "$DO_USER@$DO_HOST:$REMOTE_DIR/deploy/"
 
       # --------------------------------------------------
-      # Restart services
+      # Install deps & Restart services
       # --------------------------------------------------
-      - name: Restart backend & reload nginx
+      - name: Install backend deps & Restart services
         env:
           DO_USER: ${{ secrets.DO_SSH_USER }}
           DO_HOST: ${{ secrets.DO_SSH_HOST }}
@@ -166,6 +158,8 @@ jobs:
         run: |
           PORT=${SSH_PORT:-22}
           ssh -p $PORT "$DO_USER@$DO_HOST" "
+            cd $REMOTE_DIR/backend &&
+            npm install --omit=dev &&
             sudo systemctl daemon-reload &&
             sudo systemctl restart lankavibe-backend.service &&
             sudo nginx -t &&
