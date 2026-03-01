@@ -159,6 +159,8 @@ jobs:
           PORT=${SSH_PORT:-22}
           ssh -p $PORT "$DO_USER@$DO_HOST" "
             cd $REMOTE_DIR/backend &&
+            sudo chown -R $DO_USER:$DO_USER . &&
+            sudo rm -rf node_modules package-lock.json &&
             npm install --omit=dev &&
             sudo systemctl daemon-reload &&
             sudo systemctl restart lankavibe-backend.service &&
