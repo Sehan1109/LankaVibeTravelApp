@@ -24,7 +24,7 @@ router.post('/auto-save', autoSaveDraft);
 router.post('/refresh-prices', refreshItineraryPrices);
 
 // Admin ට සියලුම live users ලා බලාගැනීමට
-router.get('/drafts', getAllDrafts);
+router.get('/all-draft-plans', getAllDrafts);
 
 // Route: /api/plans/user/:userId
 router.get('/user/:userId', getUserPlans);

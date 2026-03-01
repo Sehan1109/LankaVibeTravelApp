@@ -60,7 +60,7 @@ const Planner: React.FC = () => {
         }
 
         // 3. Send the data to the correct existing endpoint
-        await axios.post(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'}/api/plans/auto-save`, {
+        await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/plans/auto-save`, {
             sessionId: currentSessionId, // 🔥 'session_progress' වෙනුවට අර හැදුව අලුත් ID එක යවනවා
             userId: user?._id || user?.id || null,
             guestId: guestId,
