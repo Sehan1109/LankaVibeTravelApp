@@ -277,48 +277,51 @@ export const refreshItineraryPrices = async (req, res) => {
     const isGuideIncluded = input?.includeGuide === true || input?.includeGuide === "true";
     const dailyGuideRate = 35;
 
-    const totalTravelers = input.travelers
-        ? parseInt(input.travelers)
-        : (parseInt(input.adults || 0) + parseInt(input.children || 0));
+    // 🔥 FIX: Safety check logic for travelers count
+    const adults = parseInt(input?.adults) || 0;
+    const children = parseInt(input?.children) || 0;
+    const travelersInInput = parseInt(input?.travelers) || 0;
 
-    input.travelers = totalTravelers > 0 ? totalTravelers : 1;
+    // මුලින්ම input.travelers බලනවා, ඒක නැත්නම් adults + children බලනවා, ඒ දෙකම නැත්නම් default 1 දානවා
+    const totalTravelers = travelersInInput > 0 ? travelersInInput : (adults + children > 0 ? (adults + children) : 1);
 
-    console.log(`💰 Refreshing prices for: ${input.travelers} Travelers, ${input.hotelRating || 'Current'} Stars, ${input.vehicleType}`);
+    // input object එක update කරනවා පල්ලෙහා functions වලට පාවිච්චි කරන්න පුළුවන් වෙන්න
+    if (input) {
+        input.travelers = totalTravelers;
+    }
+
+    console.log(`💰 Refreshing prices for: ${totalTravelers} Travelers, ${input?.hotelRating || 'Current'} Stars, ${input?.vehicleType}`);
 
     try {
         const updatedDays = await Promise.all(itinerary.days.map(async (day, index) => {
             const prevDay = index > 0 ? itinerary.days[index - 1] : null;
-            const origin = prevDay ? prevDay.location : input.startPoint;
+            const origin = prevDay ? prevDay.location : input?.startPoint;
 
-            // 🔥 CHECK: මේක අන්තිම දවසද කියලා බලනවා
             const isLastDay = index === itinerary.days.length - 1;
 
-            // 1. Transport: Calculate based on NEW Vehicle Type
-            const transportCost = await getRealTransportCost(origin, day.location, input.vehicleType);
+            // 1. Transport
+            const transportCost = await getRealTransportCost(origin, day.location, input?.vehicleType);
 
-            // 2. Hotel Options Logic (Updated for Last Day)
+            // 2. Hotel Options
             let hotelData = { selectedPrice: 0, allOptions: [] };
             let finalHotelPrice = 0;
 
-            // 🔥 FIX: අන්තිම දවස නෙවෙයි නම් විතරක් Hotel එකක් හොයන්න
             if (!isLastDay) {
                 hotelData = await getHotelOptions(
                     day.location,
                     day.date,
-                    input.hotelRating,
-                    input.travelers
+                    input?.hotelRating,
+                    totalTravelers // Use the calculated constant
                 );
 
                 finalHotelPrice = hotelData.selectedPrice;
 
-                // Fallback: API එකෙන් 0 ආවොත් පරණ AI ගාණ ගන්න
                 if (finalHotelPrice === 0) {
                     finalHotelPrice = (day.estimatedCost?.accommodation || 0);
                 }
             }
-            // else: අන්තිම දවස නම් finalHotelPrice එක 0 ම යි.
 
-            // 3. Tickets: Calculate based on NEW Traveler Count
+            // 3. Tickets
             let ticketsTotal = 0;
             if (day.activities && day.activities.length > 0) {
                 const ticketPromises = day.activities.map(act =>
@@ -326,42 +329,37 @@ export const refreshItineraryPrices = async (req, res) => {
                 );
                 const prices = await Promise.all(ticketPromises);
 
-                // Sum per person
                 const perPersonTotal = prices.reduce((a, b) => a + b, 0);
 
                 // Multiply by NEW Number of Travelers
-                ticketsTotal = perPersonTotal * parseInt(input.travelers || 1);
+                ticketsTotal = perPersonTotal * totalTravelers;
             }
 
             const guideCost = isGuideIncluded ? dailyGuideRate : 0;
 
-            // 4. Fallbacks
             const finalTransport = transportCost > 0 ? transportCost : (day.estimatedCost?.transportFuel || 0);
             const finalTickets = ticketsTotal > 0 ? ticketsTotal : (day.estimatedCost?.tickets || 0);
 
-            // Update the day object
             return {
                 ...day,
-                hotelOptions: hotelData.allOptions, // Last day එකේදී මේක Empty array එකක් යයි
+                hotelOptions: hotelData.allOptions,
                 estimatedCost: {
                     ...day.estimatedCost,
                     transportFuel: finalTransport,
-                    accommodation: finalHotelPrice, // 🔥 Last day එකේදී මේක 0 යි
+                    accommodation: finalHotelPrice,
                     tickets: finalTickets,
                     miscellaneous: (day.estimatedCost?.miscellaneous || 0) + guideCost,
-                    // Total එකට ඔක්කොම එකතු කරන්න (Hotel Price 0 නිසා අවුලක් නෑ)
                     total: finalTransport + finalHotelPrice + finalTickets + (day.estimatedCost?.food || 0) + (day.estimatedCost?.miscellaneous || 0) + guideCost
                 }
             };
         }));
 
-        // Calculate new total budget for the whole trip
         const newTotalBudget = updatedDays.reduce((sum, day) => sum + (day.estimatedCost?.total || 0), 0);
 
         res.json({
             ...itinerary,
             days: updatedDays,
-            estimatedTotalBudget: newTotalBudget // Update total trip cost
+            estimatedTotalBudget: newTotalBudget
         });
 
     } catch (error) {
