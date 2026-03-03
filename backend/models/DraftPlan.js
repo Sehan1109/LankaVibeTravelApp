@@ -25,6 +25,6 @@ const DraftPlanSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 
-const DraftPlan = mongoose.model('DraftPlan', DraftPlanSchema, 'draft_plans');
+const DraftPlan = mongoose.model('DraftPlan', DraftPlanSchema, 'draftplans');
 
 export default DraftPlan;
