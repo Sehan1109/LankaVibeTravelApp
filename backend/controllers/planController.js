@@ -168,8 +168,12 @@ export const getAllDrafts = async (req, res) => {
     try {
         // අලුත්ම ඒවා මුලින් එන විදියට Sort කරන්න
         const drafts = await DraftPlan.find({})
-            .sort({ lastUpdated: -1 })
+            .sort({ createdAt: -1 })
             .limit(50);
+
+        if (!drafts || drafts.length === 0) {
+            return res.status(404).json({ error: "No drafts found in database" });
+        }
 
         res.json(drafts);
     } catch (error) {
