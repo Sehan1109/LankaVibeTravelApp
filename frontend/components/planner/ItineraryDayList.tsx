@@ -47,9 +47,15 @@ const HotelSection = ({ day, onSelectHotel }: { day: any, onSelectHotel: (hotel:
 
     if (!selectedHotel) return null;
 
-    const alternatives = day.hotelOptions 
-        ? day.hotelOptions.filter((h: any) => h.name !== selectedHotel.name) 
-        : [];
+    const allPossibleHotels = useMemo(() => {
+        const options = day.hotelOptions ? [...day.hotelOptions] : [];
+        if (day.originalAccommodation && !options.find(h => h.name === day.originalAccommodation.name)) {
+            options.push(day.originalAccommodation);
+        }
+        return options;
+    }, [day.hotelOptions, day.originalAccommodation]);
+
+    const alternatives = allPossibleHotels.filter((h: any) => h.name !== selectedHotel.name);
 
     return (
         <div className="flex flex-col gap-3 w-full">
@@ -105,7 +111,7 @@ const HotelSection = ({ day, onSelectHotel }: { day: any, onSelectHotel: (hotel:
                                         {hotel.image ? <img src={hotel.image} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-400"><BedDouble className="w-4 h-4" /></div>}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between"><h5 className="text-xs font-bold text-gray-700 truncate group-hover:text-emerald-700">{hotel.name}</h5><span className="text-xs font-bold text-gray-900">${hotel.price}</span></div>
+                                        <div className="flex justify-between"><h5 className="text-xs font-bold text-gray-700 truncate group-hover:text-emerald-700">{hotel.name}</h5><span className="text-xs font-bold text-gray-900">${hotel.price || hotel.estimatedCost || 0}</span></div>
                                         <div className="flex items-center gap-2"><span className="text-[10px] text-gray-400 flex items-center"><Star className="w-2.5 h-2.5 text-yellow-400 fill-current mr-0.5" /> {hotel.rating}</span></div>
                                     </div>
                                 </div>
@@ -355,11 +361,18 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
         const newPlan = JSON.parse(JSON.stringify(basePlan));
         
         newPlan.days.forEach((day: any, index: number) => {
+            const originalHotel = basePlan.days[index].accommodation;
+            if (originalHotel && !originalHotel.price) {
+            originalHotel.price = day.estimatedCost?.accommodation || 0;
+        }
             if (hotelOverrides[index]) {
+                const selectedHotel = hotelOverrides[index];
                 const newHotel = hotelOverrides[index];
                 const oldHotelPrice = day.estimatedCost?.accommodation || 0;
-                const newHotelPrice = newHotel.price || 0;
-                day.accommodation = newHotel; 
+                const newHotelPrice = selectedHotel.price || selectedHotel.estimatedCost || 0;
+                day.accommodation = selectedHotel; 
+                const allPossibleOptions = [originalHotel, ...(basePlan.days[index].hotelOptions || [])];
+                day.hotelOptions = allPossibleOptions.filter((h: any) => h.name !== newHotel.name);
                 if (day.estimatedCost) {
                     day.estimatedCost.accommodation = newHotelPrice;
                     day.estimatedCost.total = (day.estimatedCost.total - oldHotelPrice) + newHotelPrice;

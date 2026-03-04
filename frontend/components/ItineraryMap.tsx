@@ -234,7 +234,7 @@ const ItineraryMap: React.FC<ItineraryMapProps> = ({
   }, [focusedDayIndex, mapInstance, markers, days]);
 
 
-  // --- 4. FETCH REVIEWS & DETAILS ---
+  // --- 4. FETCH DETAILS ---
   useEffect(() => {
     if (!mapInstance || !selectedActivity) {
         setPlaceDetails(null);
@@ -258,7 +258,7 @@ const ItineraryMap: React.FC<ItineraryMapProps> = ({
 
             const request = {
                 textQuery: `${selectedActivity.name} in ${selectedActivity.dayLocation}, Sri Lanka`,
-                fields: ['displayName', 'formattedAddress', 'rating', 'userRatingCount', 'photos', 'reviews'],
+                fields: ['displayName', 'formattedAddress', 'rating', 'userRatingCount', 'photos'],
                 maxResultCount: 1
             };
 
@@ -400,27 +400,6 @@ const ItineraryMap: React.FC<ItineraryMapProps> = ({
                                 <span className="truncate max-w-[200px]">{placeDetails?.formatted_address || selectedActivity.dayLocation}</span>
                             </div>
                             <p className="text-xs text-gray-600 line-clamp-2">{selectedActivity.description}</p>
-                        </div>
-                        <div className="flex-1 overflow-y-auto pr-1">
-                            <h4 className="text-xs font-bold text-gray-800 uppercase mb-2 sticky top-0 bg-white z-10 py-1">Recent Reviews</h4>
-                            {loadingDetails ? (
-                                <div className="space-y-2 opacity-50 animate-pulse"><div className="h-10 bg-gray-100 rounded"></div><div className="h-10 bg-gray-100 rounded"></div></div>
-                            ) : placeDetails?.reviews && placeDetails.reviews.length > 0 ? (
-                                <div className="space-y-3">
-                                    {placeDetails.reviews.map((review: any, idx: number) => (
-                                        <div key={idx} className="bg-gray-50 p-2 rounded-lg text-xs border border-gray-100">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                {review.photo ? <img src={review.photo} alt={review.author} className="w-5 h-5 rounded-full" /> : <div className="w-5 h-5 bg-emerald-100 rounded-full flex items-center justify-center text-[8px] font-bold text-emerald-700">{review.author.charAt(0)}</div>}
-                                                <span className="font-bold text-gray-700 truncate max-w-[100px]">{review.author}</span>
-                                                <div className="flex items-center ml-auto"><Star className="w-2.5 h-2.5 text-yellow-500 fill-current" /><span className="font-bold ml-0.5 text-gray-600">{review.rating}</span></div>
-                                            </div>
-                                            <p className="text-gray-600 leading-snug line-clamp-3 italic">"{review.text}"</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-4 text-xs text-gray-400 bg-gray-50 rounded border border-dashed border-gray-200">No reviews available.</div>
-                            )}
                         </div>
                         <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedActivity.name + " " + selectedActivity.dayLocation + " Sri Lanka")}`} target="_blank" rel="noreferrer" className="mt-3 block w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold text-center rounded-lg transition-colors">
                             View on Google Maps

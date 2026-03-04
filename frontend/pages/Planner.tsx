@@ -14,6 +14,7 @@ import SavedPlansSidebar from '../components/planner/SavedPlansSidebar';
 import ItineraryDayList from '../components/planner/ItineraryDayList';
 import RegenerateModal from '../components/planner/RegenerateModal';
 import ItineraryMap from '../components/ItineraryMap'; 
+import LoadingScreen from '@/components/planner/LoadingScreen';
 
 const Planner: React.FC = () => {
     // Hooks & Context
@@ -117,13 +118,8 @@ const Planner: React.FC = () => {
                     
                     {/* Scenario A: Loading */}
                     {loading && (
-                        <div className="flex flex-col items-center justify-center py-20 animate-fade-in">
-                            <div className="bg-white p-6 rounded-full shadow-xl mb-6 relative">
-                                <div className="absolute inset-0 rounded-full border-4 border-emerald-100 border-t-emerald-500 animate-spin"></div>
-                                <Compass className="w-10 h-10 text-emerald-600" />
-                            </div>
-                            <h2 className="text-2xl font-black text-gray-800">Crafting Your Adventure...</h2>
-                            <p className="text-gray-500 mt-2">Checking hotels, calculating routes, and finding hidden gems.</p>
+                        <div className="max-w-4xl mx-auto animate-in fade-in duration-500">
+                             <LoadingScreen />
                         </div>
                     )}
 
