@@ -113,6 +113,12 @@ const PlannerForm: React.FC<PlannerFormProps> = ({
     }
     // ඉන්පසු සාමාන්‍ය handleGenerate function එක කතා කරන්න
     handleGenerate();
+    setTimeout(() => {
+      const loadingSection = document.getElementById('itinerary-results-section');
+      if (loadingSection) {
+        loadingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 150);
   };
 
   // --- Render Steps ---
@@ -231,6 +237,7 @@ const PlannerForm: React.FC<PlannerFormProps> = ({
             type="number"
             value={input.budget}
             onChange={e => setInput({ ...input, budget: Number(e.target.value) })}
+            onFocus={(e) => e.target.select()}
             className="w-32 pl-6 pr-3 py-2 bg-white text-right font-bold rounded-lg border-2 border-emerald-200 focus:border-emerald-500 outline-none"
           />
         </div>
@@ -257,7 +264,7 @@ const PlannerForm: React.FC<PlannerFormProps> = ({
           <Car className="w-4 h-4 text-emerald-600" /> Preferred Vehicle
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {['TukTuk', 'Car (Sedan)', 'SUV', 'Passenger Van', 'Mini Bus'].map((v) => (
+          {['Bike','TukTuk', 'Car (Sedan)', 'SUV', 'Passenger Van', 'Mini Bus', 'Large Bus'].map((v) => (
             <button
               key={v}
               onClick={() => setInput({ ...input, vehicleType: v })}

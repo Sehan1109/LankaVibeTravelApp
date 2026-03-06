@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import VehiclePrice from '../models/VehiclePrice.js';
+import FuelPrice from '../models/FuelPrice.js';
 dotenv.config();
 
 const SERP_API_KEY = process.env.SERPAPI_API_KEY;
@@ -134,39 +135,118 @@ const fetchSerpApi = (params) => {
 //     });
 // };
 
-// 1. Transport Cost Calculation (Updated for Vehicle Type)
-const getRealTransportCost = async (origin, destination, vehicleType = 'Car') => {
+// Google Maps API හරහා නගර දෙක අතර සැබෑ දුර (Km) ලබා ගැනීම සහ Cache කිරීම (කාල සීමාවක් නොමැතිව)
+const getRealDistanceBetweenCities = async (origin, destination) => {
     try {
-        // A. Base Price (You can also fetch this from DB if you added baseRate to model)
-        let baseCost = 50;
+        // 1. නගර වල නම් සකසා ගැනීම
+        const safeOrigin = origin.includes("Sri Lanka") ? origin : `${origin}, Sri Lanka`;
+        const safeDestination = destination.includes("Sri Lanka") ? destination : `${destination}, Sri Lanka`;
 
-        // B. Fetch Multiplier from Database
-        // Try to find the specific vehicle type in DB
-        const vehicleData = await VehiclePrice.findOne({ type: vehicleType });
+        // 2. Cache Key එක සෑදීම
+        const cacheKey = `distance_${safeOrigin.toLowerCase()}_${safeDestination.toLowerCase()}`;
 
-        let multiplier = 1.0;
+        // 3. Cache එක කියවීම
+        const cache = readCache();
 
-        if (vehicleData) {
-            multiplier = vehicleData.multiplier;
-        } else {
-            // Fallback hardcoded values if DB fails or type missing
-            const defaults = {
-                'Bike': 0.3,
-                'TukTuk': 0.4,
-                'Car': 1.0,
-                'Van': 1.3,
-                'SUV': 1.5,
-                'MiniBus': 1.8,
-                'LargeBus': 2.5
-            };
-            multiplier = defaults[vehicleType] || 1.0;
+        // Cache එකේ දුර තියෙනවා නම්, කාලය නොබලා කෙලින්ම යවන්න
+        if (cache[cacheKey] && cache[cacheKey].distance !== undefined) {
+            console.log(`⚡ Serving DISTANCE from CACHE (Permanent): ${safeOrigin} to ${safeDestination} -> ${cache[cacheKey].distance} km`);
+            return cache[cacheKey].distance;
         }
 
-        return Math.round(baseCost * multiplier);
+        // 4. Cache එකේ නැත්නම් පමණක් Google Maps API එකට Call කිරීම
+        const API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
+        if (!API_KEY) {
+            console.warn("⚠️ Google Maps API Key is missing. Using default distance (100km).");
+            return 100;
+        }
+
+        const encodedOrigin = encodeURIComponent(safeOrigin);
+        const encodedDestination = encodeURIComponent(safeDestination);
+        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodedOrigin}&destinations=${encodedDestination}&key=${API_KEY}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        const distanceValue = data?.rows?.[0]?.elements?.[0]?.distance?.value;
+        const elementStatus = data?.rows?.[0]?.elements?.[0]?.status;
+
+        if (data.status === "OK" && elementStatus === "OK" && distanceValue !== undefined) {
+            const distanceInKm = distanceValue / 1000;
+            console.log(`📍 Real Distance from API: ${safeOrigin} to ${safeDestination} -> ${distanceInKm} km`);
+
+            // 5. අලුත් දුර Cache එකට Save කිරීම (Timestamp අවශ්‍ය නැත)
+            cache[cacheKey] = {
+                distance: distanceInKm
+            };
+            writeCache(cache); // api_cache.json එකට ලියනවා
+
+            return distanceInKm;
+        } else {
+            console.error(`⚠️ Route Error for ${safeOrigin} to ${safeDestination}: Status ${elementStatus || 'UNKNOWN'}`);
+            return 100;
+        }
     } catch (error) {
-        console.error("Transport calc error:", error);
-        return 50; // Fallback
+        console.error("Error fetching distance from Google Maps:", error.message);
+        return 100;
+    }
+};
+
+// 1. Transport Cost Calculation
+const getRealTransportCost = async (origin, destination, vehicleType) => {
+    try {
+        // A. Vehicle type එක 'Car (Sedan)' වගේ ආවොත් එය 'Car' විදිහට හදාගැනීම
+        let normalizedType = vehicleType;
+        if (vehicleType && vehicleType.includes('Car')) {
+            normalizedType = 'Car';
+        }
+
+        // B. DB එකෙන් වාහනයේ Daily Price එක ගැනීම
+        const vehicle = await VehiclePrice.findOne({ type: normalizedType });
+        const dailyRate = vehicle ? vehicle.price : 40;
+
+        // C. DB එකෙන් වර්තමාන ඉන්ධන මිල (Petrol සහ Diesel දෙකම) ගැනීම
+        const petrolSetting = await FuelPrice.findOne({ key: 'petrol_price_usd' });
+        const dieselSetting = await FuelPrice.findOne({ key: 'diesel_price_usd' });
+
+        const petrolPrice = petrolSetting ? petrolSetting.value : 1.10;
+        const dieselPrice = dieselSetting ? dieselSetting.value : 1.00;
+
+        // D. වාහනයේ වර්ගය අනුව භාවිතා වන ඉන්ධන වර්ගය සහ කාර්යක්ෂමතාව (Efficiency)
+        const efficiencies = {
+            'Bike': { kmpl: 45, fuelType: 'petrol' },
+            'TukTuk': { kmpl: 22, fuelType: 'petrol' },
+            'Car': { kmpl: 14, fuelType: 'petrol' },
+            'Van': { kmpl: 9, fuelType: 'diesel' },
+            'SUV': { kmpl: 8, fuelType: 'diesel' },
+            'MiniBus': { kmpl: 6, fuelType: 'diesel' },
+            'LargeBus': { kmpl: 3.5, fuelType: 'diesel' }
+        };
+
+        const vehicleStats = efficiencies[normalizedType] || { kmpl: 12, fuelType: 'petrol' };
+
+        const kmPerLiter = vehicleStats.kmpl;
+        const fuelPricePerLiter = vehicleStats.fuelType === 'diesel' ? dieselPrice : petrolPrice;
+
+        const safeOrigin = origin || "Colombo";
+        const safeDestination = destination || "Kandy";
+
+        const distance = await getRealDistanceBetweenCities(safeOrigin, safeDestination);
+
+        // G. ඉන්ධන වියදම ගණනය කිරීම (අදාළ ඉන්ධන මිල අනුව)
+        const fuelNeeded = distance / kmPerLiter;
+        const fuelCost = fuelNeeded * fuelPricePerLiter;
+
+        // 🔥 වෙනස් කළ කොටස: මුළු මුදල එකට යවන්නේ නැතිව, වාහන කුලිය සහ ඉන්ධන වියදම වෙන් වෙන්ව යවමු
+        return {
+            vehicleCost: Math.round(dailyRate),
+            fuelCost: Math.round(fuelCost)
+        };
+    } catch (error) {
+        console.error("Transport cost calculation failed:", error);
+        // Error එකක් ආවොත් fallback අගයත් object එකක් විදිහටම යවන්න
+        return { vehicleCost: 40, fuelCost: 10 };
     }
 };
 
@@ -299,8 +379,8 @@ export const refreshItineraryPrices = async (req, res) => {
 
             const isLastDay = index === itinerary.days.length - 1;
 
-            // 1. Transport
-            const transportCost = await getRealTransportCost(origin, day.location, input?.vehicleType);
+            // 1. Transport (දැන් එන්නේ Object එකක්)
+            const transportData = await getRealTransportCost(origin, day.location, input?.vehicleType);
 
             // 2. Hotel Options
             let hotelData = { selectedPrice: 0, allOptions: [] };
@@ -337,7 +417,10 @@ export const refreshItineraryPrices = async (req, res) => {
 
             const guideCost = isGuideIncluded ? dailyGuideRate : 0;
 
-            const finalTransport = transportCost > 0 ? transportCost : (day.estimatedCost?.transportFuel || 0);
+            // 🔥 වෙනස් කළ කොටස: Object එකෙන් Fuel සහ Vehicle Cost වෙන වෙනම ගැනීම
+            const finalFuel = transportData.fuelCost > 0 ? transportData.fuelCost : (day.estimatedCost?.transportFuel || 0);
+            const finalVehicle = transportData.vehicleCost > 0 ? transportData.vehicleCost : (day.estimatedCost?.vehicleRental || 0);
+
             const finalTickets = ticketsTotal > 0 ? ticketsTotal : (day.estimatedCost?.tickets || 0);
 
             return {
@@ -345,11 +428,13 @@ export const refreshItineraryPrices = async (req, res) => {
                 hotelOptions: hotelData.allOptions,
                 estimatedCost: {
                     ...day.estimatedCost,
-                    transportFuel: finalTransport,
+                    transportFuel: finalFuel,    // ඉන්ධන වියදම
+                    vehicleRental: finalVehicle, // වාහන කුලිය
                     accommodation: finalHotelPrice,
                     tickets: finalTickets,
                     miscellaneous: (day.estimatedCost?.miscellaneous || 0) + guideCost,
-                    total: finalTransport + finalHotelPrice + finalTickets + (day.estimatedCost?.food || 0) + (day.estimatedCost?.miscellaneous || 0) + guideCost
+                    // 🔥 Total එකට finalVehicle එකත් අලුතින් එකතු කළා
+                    total: finalFuel + finalVehicle + finalHotelPrice + finalTickets + (day.estimatedCost?.food || 0) + (day.estimatedCost?.miscellaneous || 0) + guideCost
                 }
             };
         }));

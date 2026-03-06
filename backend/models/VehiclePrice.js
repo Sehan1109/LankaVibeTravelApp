@@ -5,16 +5,12 @@ const vehiclePriceSchema = mongoose.Schema({
         type: String,
         required: true,
         unique: true,
-        enum: ['Car', 'Van', 'SUV', 'MiniBus', 'TukTuk', 'Bike', 'LargeBus'] // Ensure consistency with frontend
+        enum: ['Car', 'Van', 'SUV', 'MiniBus', 'TukTuk', 'Bike', 'LargeBus']
     },
-    multiplier: {
+    price: { // කෙලින්ම USD අගය
         type: Number,
         required: true,
-        default: 1.0
-    },
-    baseRate: {
-        type: Number,
-        default: 50 // Optional: allow configuring the base base cost ($50) dynamically too
+        default: 0
     }
 }, { timestamps: true });
 

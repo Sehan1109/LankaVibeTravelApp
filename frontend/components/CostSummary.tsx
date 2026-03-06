@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Calculator, RefreshCw, Loader2 } from 'lucide-react';
 import { Itinerary } from '../types';
 
@@ -7,13 +7,26 @@ interface CostSummaryProps {
   travelerCount: number;
   onRefreshPrices?: () => void;
   isRefreshing?: boolean;
+  onTotalChange?: (total: number) => void;
+  hotelOverrides?: Record<number, any>;
+  activityOverrides?: Record<number, any[]>;
 }
+
+const getValidPrice = (item: any, fallbackCost: number) => {
+    if (!item) return fallbackCost;
+    const rawPrice = item.price ?? item.estimatedCost ?? item.cost ?? item.ticketPrice ?? fallbackCost;
+    const parsed = parseFloat(String(rawPrice).replace(/[^0-9.]/g, ''));
+    return isNaN(parsed) ? fallbackCost : parsed;
+};
 
 const CostSummary: React.FC<CostSummaryProps> = ({ 
   itinerary, 
   travelerCount,
   onRefreshPrices,
-  isRefreshing = false
+  isRefreshing = false,
+  onTotalChange,
+  hotelOverrides,
+  activityOverrides
 }) => {
   
   // Calculate Totals automatically
@@ -31,18 +44,28 @@ const CostSummary: React.FC<CostSummaryProps> = ({
 
     if (!itinerary || !itinerary.days) return initial;
 
-    return itinerary.days.reduce((acc, day) => {
+    return itinerary.days.reduce((acc, day, index) => {
       const c = day.estimatedCost || {}; 
+
+      let accCost = Number(c.accommodation) || 0;
+      if (hotelOverrides && hotelOverrides[index]) {
+          accCost = getValidPrice(hotelOverrides[index], accCost);
+      }
+
+      let tckCost = Number(c.tickets) || 0;
+      if (activityOverrides && activityOverrides[index] && activityOverrides[index].length > 0) {
+          tckCost = activityOverrides[index].reduce((sum: number, act: any) => sum + getValidPrice(act, 0), 0);
+      }
       
       return {
-        accommodation: acc.accommodation + (Number(c.accommodation) || 0),
-        tickets: acc.tickets + (Number(c.tickets) || 0),
+        accommodation: acc.accommodation + accCost,
+        tickets: acc.tickets + tckCost,
         food: acc.food + (Number(c.food) || 0),
         transportFuel: acc.transportFuel + (Number(c.transportFuel) || 0),
         vehicleRental: acc.vehicleRental + (Number(c.vehicleRental) || 0),
         guide: acc.guide + (Number(c.guide) || 0),
         miscellaneous: acc.miscellaneous + (Number(c.miscellaneous) || 0),
-        grandTotal: acc.grandTotal + (Number(c.total) || 0) 
+        grandTotal: acc.grandTotal + (Number(c.total) || 0)
       };
     }, initial);
   }, [itinerary]);
@@ -56,6 +79,12 @@ const CostSummary: React.FC<CostSummaryProps> = ({
     totals.vehicleRental + 
     totals.guide + 
     totals.miscellaneous;
+
+  useEffect(() => {
+    if (onTotalChange) {
+      onTotalChange(calculatedGrandTotal);
+    }
+  }, [calculatedGrandTotal, onTotalChange]);
 
   const fmt = (val: number) => `$${val.toLocaleString()}`;
 

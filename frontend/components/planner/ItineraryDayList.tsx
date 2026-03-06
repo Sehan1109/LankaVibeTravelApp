@@ -19,6 +19,7 @@ interface ItineraryDayListProps {
     setActivityOverrides: React.Dispatch<React.SetStateAction<Record<number, any[]>>>;
     hotelOverrides: Record<number, any>;
     setHotelOverrides: React.Dispatch<React.SetStateAction<Record<number, any>>>;
+    onTotalChange?: (total: number) => void;
 }
 
 // --- Helper Functions & Components ---
@@ -42,7 +43,7 @@ const ExpandableDescription = ({ text }: { text: string }) => {
 };
 
 const HotelSection = ({ day, onSelectHotel }: { day: any, onSelectHotel: (hotel: any) => void }) => {
-    const selectedHotel = day.accommodation; 
+    const selectedHotel = day.accommodation;
     const [showOptions, setShowOptions] = useState(false);
 
     if (!selectedHotel) return null;
@@ -141,13 +142,12 @@ const SuggestionCard = ({ suggestion, onAdd }: { suggestion: any, onAdd: () => v
                     <span className="text-[10px] text-gray-500">{suggestion.category || 'General'} • ${suggestion.estimatedCost || 0} • {suggestion.duration || '1h'}</span>
                 </div>
             </div>
-            <button 
+            <button
                 onClick={onAdd}
-                className={`text-[10px] font-bold px-2 py-1 rounded-md transition-all shadow-sm flex items-center gap-1 ${
-                    isRestored 
-                    ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-200' 
-                    : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-500 hover:text-white'
-                }`}
+                className={`text-[10px] font-bold px-2 py-1 rounded-md transition-all shadow-sm flex items-center gap-1 ${isRestored
+                        ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-200'
+                        : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-500 hover:text-white'
+                    }`}
             >
                 <Plus className="w-3 h-3" /> {isRestored ? 'Restore' : 'Add'}
             </button>
@@ -166,18 +166,18 @@ const SwapModal = ({ isOpen, onClose, newActivity, currentActivities, onSwap }: 
                     <AlertTriangle className="w-6 h-6" />
                     <h3 className="text-lg font-bold">Day Schedule Full!</h3>
                 </div>
-                
+
                 <p className="text-gray-600 mb-4 text-sm leading-relaxed">
-                    Adding <strong>{newActivity.name}</strong> ({newActivity.duration || '1h'}) will exceed the daily time limit. 
+                    Adding <strong>{newActivity.name}</strong> ({newActivity.duration || '1h'}) will exceed the daily time limit.
                     Please select an activity to <strong>replace</strong>:
                 </p>
 
                 <div className="space-y-2 max-h-60 overflow-y-auto mb-4 pr-1">
                     {currentActivities.map((act: any, idx: number) => {
-                         const actName = typeof act === 'string' ? act : act.name;
-                         const actDuration = typeof act === 'object' && act.duration ? act.duration : '1 hour';
-                         
-                         return (
+                        const actName = typeof act === 'string' ? act : act.name;
+                        const actDuration = typeof act === 'object' && act.duration ? act.duration : '1 hour';
+
+                        return (
                             <button
                                 key={idx}
                                 onClick={() => onSwap(idx)}
@@ -185,7 +185,7 @@ const SwapModal = ({ isOpen, onClose, newActivity, currentActivities, onSwap }: 
                             >
                                 <div>
                                     <div className="font-semibold text-gray-800 text-sm">{actName}</div>
-                                    <div className="text-xs text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3"/> {actDuration}</div>
+                                    <div className="text-xs text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {actDuration}</div>
                                 </div>
                                 <ArrowRightLeft className="w-4 h-4 text-gray-400 group-hover:text-red-500" />
                             </button>
@@ -206,13 +206,12 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
     itinerary, input, history, currentIndex, switchVersion,
     regeneratingDayIndex, setRegenerateModal, isLoaded,
     focusedDayIndex, setFocusedDayIndex, onActivitySelect,
-    activityOverrides, setActivityOverrides
+    activityOverrides, setActivityOverrides, hotelOverrides, setHotelOverrides, onTotalChange
 }) => {
 
     const basePlan = (history && history.length > 0 && history[currentIndex]) ? history[currentIndex] : itinerary;
-    
-    // Override States
-    const [hotelOverrides, setHotelOverrides] = useState<Record<number, any>>({});
+
+    // Override States;
     const [extraSuggestions, setExtraSuggestions] = useState<Record<number, any[]>>({});
     const [swapModalData, setSwapModalData] = useState<{ dayIndex: number, newSuggestion: any } | null>(null);
 
@@ -285,10 +284,10 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
     const handleSwapActivity = (activityIndexToRemove: number) => {
         if (!swapModalData) return;
         const { dayIndex, newSuggestion } = swapModalData;
-        
+
         setActivityOverrides(prev => {
             const current = [...(prev[dayIndex] || basePlan.days[dayIndex].activities)];
-            
+
             // 1. Get the activity we are about to remove
             const removedActivity = current[activityIndexToRemove];
 
@@ -331,7 +330,7 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
     const handleRemoveActivity = (dayIndex: number, activityName: string) => {
         setActivityOverrides(prev => {
             const currentActivities = prev[dayIndex] || basePlan.days[dayIndex].activities;
-            
+
             // 1. Find the object before removing
             const activityToRemove = currentActivities.find((a: any) => (typeof a === 'string' ? a : a.name) === activityName);
 
@@ -348,9 +347,9 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
             }
 
             // 3. Remove from Active List
-            return { 
-                ...prev, 
-                [dayIndex]: currentActivities.filter((a: any) => (typeof a === 'string' ? a : a.name) !== activityName) 
+            return {
+                ...prev,
+                [dayIndex]: currentActivities.filter((a: any) => (typeof a === 'string' ? a : a.name) !== activityName)
             };
         });
     };
@@ -359,18 +358,18 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
     const displayedPlan = useMemo(() => {
         if (!basePlan || !basePlan.days) return null;
         const newPlan = JSON.parse(JSON.stringify(basePlan));
-        
+
         newPlan.days.forEach((day: any, index: number) => {
             const originalHotel = basePlan.days[index].accommodation;
             if (originalHotel && !originalHotel.price) {
-            originalHotel.price = day.estimatedCost?.accommodation || 0;
-        }
+                originalHotel.price = day.estimatedCost?.accommodation || 0;
+            }
             if (hotelOverrides[index]) {
                 const selectedHotel = hotelOverrides[index];
                 const newHotel = hotelOverrides[index];
                 const oldHotelPrice = day.estimatedCost?.accommodation || 0;
                 const newHotelPrice = selectedHotel.price || selectedHotel.estimatedCost || 0;
-                day.accommodation = selectedHotel; 
+                day.accommodation = selectedHotel;
                 const allPossibleOptions = [originalHotel, ...(basePlan.days[index].hotelOptions || [])];
                 day.hotelOptions = allPossibleOptions.filter((h: any) => h.name !== newHotel.name);
                 if (day.estimatedCost) {
@@ -398,23 +397,23 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
 
         customizedPlan.days = customizedPlan.days.map((day: any, index: number) => {
             const newDay = { ...day };
-            
+
             // 1. User අලුතින් Add/Remove කරපු Activities තියෙනවද බලලා ඒවා replace කිරීම
             if (activityOverrides && activityOverrides[index]) {
-                 newDay.activities = activityOverrides[index];
+                newDay.activities = activityOverrides[index];
             }
-            
+
             // 2. User වෙනස් කරපු Hotels තියෙනවද බලලා ඒවා replace කිරීම 
             // (ඔබේ component එකේ hotelOverrides state එකක් ඇතැයි උපකල්පනය කරමි)
             if (typeof hotelOverrides !== 'undefined' && hotelOverrides[index]) {
-                 newDay.accommodation = hotelOverrides[index];
+                newDay.accommodation = hotelOverrides[index];
             }
 
             return newDay;
         });
 
         // අලුත් කරපු Plan එක PDF generator එකට යැවීම
-        generatePDF(customizedPlan, input);
+        generatePDF(customizedPlan, input, activityOverrides, hotelOverrides);
     };
 
     if (!displayedPlan || !displayedPlan.days) return null;
@@ -439,7 +438,7 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
                     </div>
                 </div>
             )}
-            
+
             {/* History Tabs */}
             {history.length > 1 && (
                 <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-gray-200 w-full sm:w-fit overflow-x-auto scrollbar-hide">
@@ -465,130 +464,135 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
                     const uniqueSuggestions = Array.from(new Map(combinedSuggestions.map(item => [item.name, item])).values());
 
                     return (
-                    <div 
-                        key={index} 
-                        onClick={() => setFocusedDayIndex(index)}
-                        className={`bg-white rounded-xl sm:rounded-[1.5rem] p-3 sm:p-6 shadow-sm border transition-all duration-300 cursor-pointer relative group ${
-                            isFocused ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-md' : 'border-gray-100 hover:border-emerald-200'
-                        }`}
-                    >
-                        <div className="flex flex-row items-start gap-3 sm:gap-6">
-                            {/* Date Badge */}
-                            <div className="flex-shrink-0 w-[65px] sm:w-24 md:w-28">
-                                <div className={`rounded-xl sm:rounded-2xl py-3 px-1 sm:p-4 flex flex-col items-center justify-center text-center h-full max-h-[100px] sm:max-h-[120px] transition-colors ${isFocused ? 'bg-emerald-600 text-white' : 'bg-[#E0F2F1] text-[#00695C]'}`}>
-                                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-0.5 sm:mb-1">Day {day.day}</span>
-                                    <span className="text-sm sm:text-lg font-black leading-tight break-all">
-                                        {input.startDate ? new Date(new Date(input.startDate).setDate(new Date(input.startDate).getDate() + index)).toISOString().slice(5, 10) : `Day ${index + 1}`}
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <div className="flex-1 min-w-0 flex flex-col justify-center"> 
-                                <div className="flex justify-between items-start mb-2">
-                                    <h3 className="text-lg sm:text-2xl font-black text-gray-900 leading-tight flex items-center gap-2">
-                                        {day.location}
-                                        {isFocused && <MapPin className="w-4 h-4 text-emerald-500 animate-bounce" />}
-                                    </h3>
-                                    {currentIndex === history.length - 1 && (
-                                        <button onClick={(e) => { e.stopPropagation(); setRegenerateModal({ isOpen: true, dayIndex: index }); }} disabled={regeneratingDayIndex === index} className="text-gray-400 hover:text-[#00695C] transition-colors p-1 ml-2 flex-shrink-0">
-                                            <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${regeneratingDayIndex === index ? 'animate-spin' : ''}`} />
-                                        </button>
-                                    )}
-                                </div>
-                                
-                                <ExpandableDescription text={day.description} />
-                                
-                                {/* 🔥 ACTIVITIES SECTION */}
-                                <div className="mb-4 w-full">
-                                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Activities (Click to view details)</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {day.activities.map((act: any, i: number) => {
-                                            const actName = typeof act === 'string' ? act : act.name;
-                                            return (
-                                                <div 
-                                                    key={i} 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation(); 
-                                                        if (onActivitySelect) {
-                                                            onActivitySelect({
-                                                                name: actName,
-                                                                category: typeof act !== 'string' && act.category ? act.category : (actName.includes('Temple') ? 'Culture' : 'Sightseeing'),
-                                                                dayLocation: day.location,
-                                                                dayNumber: day.day,
-                                                                description: typeof act !== 'string' ? act.description : `Visit to ${actName}`
-                                                            });
-                                                        }
-                                                    }}
-                                                    className="group/tag relative px-2.5 py-1 sm:px-3 sm:py-1.5 bg-gray-100 text-gray-600 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-1 hover:bg-emerald-100 hover:text-emerald-700 transition-colors cursor-pointer border border-transparent hover:border-emerald-200"
-                                                >
-                                                    {actName.includes('Temple') ? <Tag className="w-3 h-3" /> : <Ticket className="w-3 h-3" />} 
-                                                    {actName}
-                                                    <button 
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleRemoveActivity(index, actName);
-                                                        }}
-                                                        className="ml-1 opacity-0 group-hover/tag:opacity-100 hover:bg-red-200 text-gray-400 hover:text-red-500 rounded-full p-0.5 transition-all"
-                                                        title="Remove Activity"
-                                                    >
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* 🔥 SUGGESTIONS SECTION (Includes Removed Activities) */}
-                                {uniqueSuggestions.length > 0 && (
-                                <div className="mb-4 animate-fade-in">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                                            Available Stops & Suggestions
+                        <div
+                            key={index}
+                            onClick={() => setFocusedDayIndex(index)}
+                            className={`bg-white rounded-xl sm:rounded-[1.5rem] p-3 sm:p-6 shadow-sm border transition-all duration-300 cursor-pointer relative group ${isFocused ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-md' : 'border-gray-100 hover:border-emerald-200'
+                                }`}
+                        >
+                            <div className="flex flex-row items-start gap-3 sm:gap-6">
+                                {/* Date Badge */}
+                                <div className="flex-shrink-0 w-[65px] sm:w-24 md:w-28">
+                                    <div className={`rounded-xl sm:rounded-2xl py-3 px-1 sm:p-4 flex flex-col items-center justify-center text-center h-full max-h-[100px] sm:max-h-[120px] transition-colors ${isFocused ? 'bg-emerald-600 text-white' : 'bg-[#E0F2F1] text-[#00695C]'}`}>
+                                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-0.5 sm:mb-1">Day {day.day}</span>
+                                        <span className="text-sm sm:text-lg font-black leading-tight break-all">
+                                            {input.startDate ? new Date(new Date(input.startDate).setDate(new Date(input.startDate).getDate() + index)).toISOString().slice(5, 10) : `Day ${index + 1}`}
                                         </span>
                                     </div>
-                                    <div className="grid gap-1">
-                                        {uniqueSuggestions.map((sug: any, sIdx: number) => {
-                                            // Ensure we don't show suggestion if it's already in the active list
-                                            const isAdded = day.activities.some((act: any) => (typeof act === 'string' ? act : act.name) === sug.name);
-                                            if (isAdded) return null;
-
-                                            return (
-                                                <SuggestionCard 
-                                                    key={sIdx} 
-                                                    suggestion={sug} 
-                                                    onAdd={(e: any) => {
-                                                        if (e) e.stopPropagation();
-                                                        handleTryAddSuggestion(index, sug);
-                                                    }} 
-                                                />
-                                            );
-                                        })}
-                                    </div>
                                 </div>
-                                )}
 
-                                {/* COSTS */}
-                                <div className="bg-gray-50 rounded-xl p-3 sm:p-4 mb-4 border border-gray-100 w-full">
-                                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-between items-center gap-y-3 gap-x-2">
-                                        <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Car className="w-3 h-3" /> Transport</span><span className="font-bold text-gray-900 text-sm">${(day.estimatedCost?.transportFuel || 0).toLocaleString()}</span></div>
-                                        <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
-                                        <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><BedDouble className="w-3 h-3" /> Hotel</span><span className="font-bold text-gray-900 text-sm">${(day.estimatedCost?.accommodation || 0).toLocaleString()}</span></div>
-                                        <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
-                                        <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Ticket className="w-3 h-3" /> Tickets</span><span className="font-bold text-gray-900 text-sm">${(day.estimatedCost?.tickets || 0).toLocaleString()}</span></div>
-                                        <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-1 text-[#00695C] pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-200 mt-1 sm:mt-0"><DollarSign className="w-3.5 h-3.5" /><span className="font-black text-base sm:text-lg">{((day.estimatedCost?.total || 0)).toLocaleString()}</span></div>
+                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="text-lg sm:text-2xl font-black text-gray-900 leading-tight flex items-center gap-2">
+                                            {day.location}
+                                            {isFocused && <MapPin className="w-4 h-4 text-emerald-500 animate-bounce" />}
+                                        </h3>
+                                        {day.travelDistance && (
+                                            <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-bold text-emerald-700 w-fit shadow-sm">
+                                                <Car className="w-3.5 h-3.5 text-emerald-600" />
+                                                {day.travelDistance} driving today
+                                            </span>
+                                        )}
+                                        {currentIndex === history.length - 1 && (
+                                            <button onClick={(e) => { e.stopPropagation(); setRegenerateModal({ isOpen: true, dayIndex: index }); }} disabled={regeneratingDayIndex === index} className="text-gray-400 hover:text-[#00695C] transition-colors p-1 ml-2 flex-shrink-0">
+                                                <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${regeneratingDayIndex === index ? 'animate-spin' : ''}`} />
+                                            </button>
+                                        )}
                                     </div>
+
+                                    <ExpandableDescription text={day.description} />
+
+                                    {/* 🔥 ACTIVITIES SECTION */}
+                                    <div className="mb-4 w-full">
+                                        <p className="text-xs font-bold text-gray-400 uppercase mb-2">Activities (Click to view details)</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {day.activities.map((act: any, i: number) => {
+                                                const actName = typeof act === 'string' ? act : act.name;
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (onActivitySelect) {
+                                                                onActivitySelect({
+                                                                    name: actName,
+                                                                    category: typeof act !== 'string' && act.category ? act.category : (actName.includes('Temple') ? 'Culture' : 'Sightseeing'),
+                                                                    dayLocation: day.location,
+                                                                    dayNumber: day.day,
+                                                                    description: typeof act !== 'string' ? act.description : `Visit to ${actName}`
+                                                                });
+                                                            }
+                                                        }}
+                                                        className="group/tag relative px-2.5 py-1 sm:px-3 sm:py-1.5 bg-gray-100 text-gray-600 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-1 hover:bg-emerald-100 hover:text-emerald-700 transition-colors cursor-pointer border border-transparent hover:border-emerald-200"
+                                                    >
+                                                        {actName.includes('Temple') ? <Tag className="w-3 h-3" /> : <Ticket className="w-3 h-3" />}
+                                                        {actName}
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleRemoveActivity(index, actName);
+                                                            }}
+                                                            className="ml-1 opacity-0 group-hover/tag:opacity-100 hover:bg-red-200 text-gray-400 hover:text-red-500 rounded-full p-0.5 transition-all"
+                                                            title="Remove Activity"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* 🔥 SUGGESTIONS SECTION (Includes Removed Activities) */}
+                                    {uniqueSuggestions.length > 0 && (
+                                        <div className="mb-4 animate-fade-in">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                                                    Available Stops & Suggestions
+                                                </span>
+                                            </div>
+                                            <div className="grid gap-1">
+                                                {uniqueSuggestions.map((sug: any, sIdx: number) => {
+                                                    // Ensure we don't show suggestion if it's already in the active list
+                                                    const isAdded = day.activities.some((act: any) => (typeof act === 'string' ? act : act.name) === sug.name);
+                                                    if (isAdded) return null;
+
+                                                    return (
+                                                        <SuggestionCard
+                                                            key={sIdx}
+                                                            suggestion={sug}
+                                                            onAdd={(e: any) => {
+                                                                if (e) e.stopPropagation();
+                                                                handleTryAddSuggestion(index, sug);
+                                                            }}
+                                                        />
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* COSTS */}
+                                    <div className="bg-gray-50 rounded-xl p-3 sm:p-4 mb-4 border border-gray-100 w-full">
+                                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-between items-center gap-y-3 gap-x-2">
+                                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Car className="w-3 h-3" /> Transport</span><span className="font-bold text-gray-900 text-sm">${(day.estimatedCost?.transportFuel || 0).toLocaleString()}</span></div>
+                                            <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
+                                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><BedDouble className="w-3 h-3" /> Hotel</span><span className="font-bold text-gray-900 text-sm">${(day.estimatedCost?.accommodation || 0).toLocaleString()}</span></div>
+                                            <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
+                                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1"><Ticket className="w-3 h-3" /> Tickets</span><span className="font-bold text-gray-900 text-sm">${(day.estimatedCost?.tickets || 0).toLocaleString()}</span></div>
+                                            <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-1 text-[#00695C] pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-200 mt-1 sm:mt-0"><DollarSign className="w-3.5 h-3.5" /><span className="font-black text-base sm:text-lg">{((day.estimatedCost?.total || 0)).toLocaleString()}</span></div>
+                                        </div>
+                                    </div>
+                                    {!isLastDay && (<HotelSection day={day} onSelectHotel={(newHotel) => setHotelOverrides(prev => ({ ...prev, [index]: newHotel }))} />)}
                                 </div>
-                                {!isLastDay && (<HotelSection day={day} onSelectHotel={(newHotel) => setHotelOverrides(prev => ({ ...prev, [index]: newHotel }))} />)}
                             </div>
                         </div>
-                    </div>
                     );
                 })}
             </div>
 
             <div className="mb-12 animate-fade-in-up delay-200">
-                <CostSummary itinerary={displayedPlan} travelerCount={input.adults + input.children} />
+                <CostSummary itinerary={displayedPlan} travelerCount={input.adults + input.children} hotelOverrides={hotelOverrides} activityOverrides={activityOverrides} onTotalChange={onTotalChange} />
             </div>
 
             <div className="mt-12 text-center pb-8">
@@ -599,7 +603,7 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
 
             {/* 🔥 RENDER SWAP MODAL */}
             {swapModalData && (
-                <SwapModal 
+                <SwapModal
                     isOpen={true}
                     onClose={() => setSwapModalData(null)}
                     newActivity={swapModalData.newSuggestion}

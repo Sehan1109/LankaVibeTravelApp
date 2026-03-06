@@ -160,7 +160,7 @@ const DAY_SCHEMA_PROPERTIES = {
     },
     activityImageKeyword: { type: Type.STRING },
     travelTime: { type: Type.STRING },
-    travelDistance: { type: Type.STRING },
+    travelDistance: { type: Type.STRING,description: "Total driving distance for this day in Kilometers (e.g. '120 km')" },
     isDayBudgetSufficient: { type: Type.BOOLEAN },
     budgetWarningMessage: { type: Type.STRING}
 };
@@ -363,7 +363,7 @@ export const generateItinerary = async (input: PlannerInput): Promise<Itinerary>
                     items: {
                         type: Type.OBJECT,
                         properties: DAY_SCHEMA_PROPERTIES, 
-                        required: ['day', 'date', 'location', 'activities', 'detailedActivities', 'estimatedCost', 'accommodation', 'travelTime', 'suggestions']
+                        required: ['day', 'date', 'location', 'activities', 'detailedActivities', 'estimatedCost', 'accommodation', 'travelTime', 'travelDistance', 'suggestions']
                     }
                 }
             },
@@ -491,7 +491,7 @@ export const regenerateSingleDay = async (
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: DAY_SCHEMA_PROPERTIES,
-                    required: ['day', 'date', 'location', 'activities', 'detailedActivities', 'estimatedCost', 'accommodation', 'suggestions']
+                    required: ['day', 'date', 'location', 'activities', 'detailedActivities', 'estimatedCost', 'accommodation', 'travelDistance', 'suggestions']
                 },
                 maxOutputTokens: 8192
             }
