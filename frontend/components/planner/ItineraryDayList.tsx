@@ -37,7 +37,7 @@ const ExpandableDescription = ({ text }: { text: string }) => {
     return (
         <div onClick={() => setIsExpanded(!isExpanded)} className="group cursor-pointer transition-all duration-200">
             <p className={`text-gray-500 text-sm leading-relaxed mb-4 ${isExpanded ? '' : 'line-clamp-3'}`}>{text}</p>
-            {!isExpanded && text.length > 150 && (<span className="text-[10px] font-bold text-emerald-600 uppercase mt-[-10px] block mb-4 group-hover:underline">Read More</span>)}
+            {!isExpanded && text?.length > 150 && (<span className="text-[10px] font-bold text-emerald-600 uppercase mt-[-10px] block mb-4 group-hover:underline">Read More</span>)}
         </div>
     );
 };

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { Loader2, Compass, Map as MapIcon } from 'lucide-react';
+import { Loader2, Compass, Map as MapIcon, AlertCircle } from 'lucide-react';
 import { usePlanner } from '../hooks/usePlanner';
 import { useAuth } from '../hooks/useAuth';
 import PlannerForm from '../components/PlannerForm';
@@ -140,6 +140,25 @@ const Planner: React.FC = () => {
                                 <MapIcon className="w-10 h-10 text-gray-400" />
                             </div>
                             <p className="text-gray-500 font-medium">Fill out the steps above to see your customized plan here.</p>
+                        </div>
+                    )}
+
+                    {error && !loading && (
+                        <div className="text-center py-12 animate-in fade-in duration-500">
+                            <div className="w-20 h-20 bg-red-50 rounded-full mx-auto flex items-center justify-center mb-4 border border-red-100">
+                                <AlertCircle className="w-10 h-10 text-red-500" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">Oops! Something went wrong.</h3>
+                            <p className="text-gray-500 font-medium mb-6 max-w-md mx-auto">
+                                {typeof error === 'string' ? error : "Plan එක generate කිරීමේදී දෝෂයක් ඇති විය. කරුණාකර නැවත උත්සාහ කරන්න."}
+                            </p>
+                            <button
+                                onClick={() => handleGenerate(input)} 
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-sm transition-colors"
+                            >
+                                <Compass className="w-5 h-5" />
+                                Try Regenerating Plan
+                            </button>
                         </div>
                     )}
 

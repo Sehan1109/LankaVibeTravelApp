@@ -43,53 +43,74 @@ const writeCache = (data) => {
 // ---------------------------------------------------------
 
 //Helper to wrap SerpApi
-const fetchSerpApi = (params) => {
-    return new Promise((resolve, reject) => {
-        const cacheKey = `${params.engine}_${params.q}`;
+const fetchSerpApi = async (params, fallbackKeyword = null) => {
+    const cacheKey = `${params.engine}_${params.q}`;
 
-        // B. CACHE CHECK කිරීම
-        const cache = readCache();
-        const CACHE_DURATION = 30 * 24 * 60 * 60 * 1000;
+    // B. CACHE CHECK කිරීම (Exact Match)
+    const cache = readCache();
+    const CACHE_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 Days
 
-        if (cache[cacheKey]) {
-            const cachedItem = cache[cacheKey];
-            const now = Date.now();
+    if (cache[cacheKey]) {
+        const cachedItem = cache[cacheKey];
+        const now = Date.now();
 
-            if (cachedItem.timestamp && (now - cachedItem.timestamp < CACHE_DURATION)) {
-                console.log(`⚡ Serving from CACHE (Valid): ${params.q.substring(0, 30)}...`);
-                return resolve(cachedItem.data); // data object එක විතරක් යවනවා
-            } else {
-                console.log(`⌛ Cache Expired for: ${params.q.substring(0, 30)}...`);
-                // මාසයකට වඩා පරණ නම් අලුතෙන් API call එක ගනී
+        if (cachedItem.timestamp && (now - cachedItem.timestamp < CACHE_DURATION)) {
+            console.log(`⚡ Serving from CACHE (Exact Match): ${params.q.substring(0, 30)}...`);
+            return cachedItem.data;
+        }
+    }
+
+    console.log(`🌐 Calling SERP API: ${params.q.substring(0, 30)}...`);
+
+    // 🔥 Cache එකෙන් Fallback Data හොයන Function එක
+    const getFallbackFromCache = () => {
+        if (fallbackKeyword) {
+            const lowerKeyword = fallbackKeyword.toLowerCase();
+            for (const key in cache) {
+                if (key.startsWith(params.engine) && key.toLowerCase().includes(lowerKeyword)) {
+                    console.log(`♻️ Using FALLBACK CACHE for: ${fallbackKeyword} (Found in: ${key})`);
+                    return cache[key].data;
+                }
             }
         }
+        return null;
+    };
 
-        console.log(`🌐 Calling SERP API: ${params.q.substring(0, 30)}...`);
+    // C. API CALL එක ගැනීම
+    if (!SERP_API_KEY) {
+        console.warn("⚠️ API Key is missing. Trying Fallback Cache...");
+        return getFallbackFromCache() || { error: "No API Key Provided" };
+    }
 
-        // C. API CALL එක ගැනීම (Cache එකේ නැත්නම් විතරයි)
-        if (!SERP_API_KEY) {
-            return reject("No API Key Provided");
+    try {
+        // 🔥 වෙනස මෙතනයි! Callback වෙනුවට කෙලින්ම await කරනවා.
+        // ඒ නිසා SerpAPI package එකෙන් Error එකක් (Token Limit) ආවොත්, ඒක කෙලින්ම පහළ තියෙන Catch එකට යනවා!
+        const json = await getJson({ ...params, api_key: SERP_API_KEY });
+
+        if (json.error) {
+            console.error("⚠️ API Error Response:", json.error);
+            return getFallbackFromCache() || { error: json.error };
         }
 
-        getJson({ ...params, api_key: SERP_API_KEY }, (json) => {
-            if (json.error) {
-                console.error("⚠️ API Error:", json.error);
-                // Error ආවොත් Cache කරන්නේ නෑ, නිකන්ම reject කරනවා
-                reject(json.error);
-            } else {
-                // D. SUCCESS නම් CACHE එකට SAVE කිරීම
-                cache[cacheKey] = {
-                    data: json,
-                    timestamp: Date.now()
-                };
-                writeCache(cache); // ෆයිල් එකට ලියනවා
-                resolve(json);
-            }
-        });
-    });
+        // D. SUCCESS නම් CACHE එකට SAVE කිරීම
+        cache[cacheKey] = {
+            data: json,
+            timestamp: Date.now()
+        };
+        writeCache(cache);
+        return json;
+
+    } catch (err) {
+        // 🔥 SerpApi package එකෙන් Token ඉවර වුණාම දෙන Error එක අල්ලගන්න තැන.
+        console.error("⚠️ SerpAPI Rejection Caught (Token Limit/Network):", err.message || err);
+
+        const fallbackData = getFallbackFromCache();
+        if (fallbackData) {
+            return fallbackData; // Fallback එක තියෙනවා නම් ඒක යවනවා.
+        }
+        return { error: err.message || "Unknown API error" }; // මුකුත්ම නැත්නම් විතරක් හිස් error එක යවනවා (Crash වෙන්නේ නෑ).
+    }
 };
-
-
 
 // ---------------------------------------------------------
 // HELPER FUNCTIONS (API Calls - MOCKED FOR DEVELOPMENT)
@@ -279,7 +300,7 @@ const getHotelOptions = async (location, checkInDate, starRating, travelers) => 
             gl: "lk",
             hl: "en",
             sort_by: "8"
-        });
+        }, location);
 
         let options = [];
 
@@ -327,7 +348,7 @@ const getRealTicketPrice = async (activityName) => {
             google_domain: "google.com",
             gl: "us",
             hl: "en"
-        });
+        }, activityName);
 
         // Search for price in Answer Box or Knowledge Graph
         if (json.answer_box && json.answer_box.price) {
