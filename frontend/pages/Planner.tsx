@@ -103,7 +103,7 @@ const Planner: React.FC = () => {
             />
 
             {/* 🔥 CHANGE 1: Increased Max Width to give map more room (was max-w-7xl) */}
-            <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 space-y-8">
+            <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-16 sm:py-30 space-y-8">
 
                 {/* 1. PLANNER FORM (WIZARD) */}
                 <div className="relative z-20 max-w-7xl mx-auto w-full">
