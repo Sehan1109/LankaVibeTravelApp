@@ -470,18 +470,19 @@ const ItineraryDayList: React.FC<ItineraryDayListProps> = ({
                             className={`bg-white rounded-xl sm:rounded-[1.5rem] p-3 sm:p-6 shadow-sm border transition-all duration-300 cursor-pointer relative group ${isFocused ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-md' : 'border-gray-100 hover:border-emerald-200'
                                 }`}
                         >
-                            <div className="flex flex-row items-start gap-3 sm:gap-6">
+                            {/* 🔥 වෙනස් කළ කොටස: flex-col sm:flex-row භාවිතයෙන් mobile වලදී udin row එකක් කිරීම */}
+                            <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-6">
                                 {/* Date Badge */}
-                                <div className="flex-shrink-0 w-[65px] sm:w-24 md:w-28">
-                                    <div className={`rounded-xl sm:rounded-2xl py-3 px-1 sm:p-4 flex flex-col items-center justify-center text-center h-full max-h-[100px] sm:max-h-[120px] transition-colors ${isFocused ? 'bg-emerald-600 text-white' : 'bg-[#E0F2F1] text-[#00695C]'}`}>
-                                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-0.5 sm:mb-1">Day {day.day}</span>
+                                <div className="flex-shrink-0 w-full sm:w-24 md:w-28">
+                                    <div className={`rounded-xl sm:rounded-2xl py-2 px-4 sm:p-4 flex flex-row sm:flex-col items-center justify-between sm:justify-center text-left sm:text-center w-full transition-colors sm:h-full sm:max-h-[120px] ${isFocused ? 'bg-emerald-600 text-white' : 'bg-[#E0F2F1] text-[#00695C]'}`}>
+                                        <span className="text-xs font-bold uppercase tracking-wider mb-0 sm:mb-1">Day {day.day}</span>
                                         <span className="text-sm sm:text-lg font-black leading-tight break-all">
                                             {input.startDate ? new Date(new Date(input.startDate).setDate(new Date(input.startDate).getDate() + index)).toISOString().slice(5, 10) : `Day ${index + 1}`}
                                         </span>
                                     </div>
                                 </div>
 
-                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                <div className="flex-1 min-w-0 w-full flex flex-col justify-center">
                                     <div className="flex justify-between items-start mb-2">
                                         <h3 className="text-lg sm:text-2xl font-black text-gray-900 leading-tight flex items-center gap-2">
                                             {day.location}

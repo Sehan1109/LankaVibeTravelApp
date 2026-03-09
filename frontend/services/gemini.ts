@@ -171,8 +171,6 @@ export const generateItinerary = async (input: PlannerInput): Promise<Itinerary>
     const totalDays = calculateDays(input.arrivalDate, input.departureDate);
     const dailyBudget = Math.floor(input.budget / totalDays);
 
-    console.log("📍 Step 1: සම්පූර්ණ ගමන් මාර්ගය (Master Route) සැලසුම් කරමින්...");
-
     // ==========================================
     // STEP 1: CREATE THE MASTER ROUTE
     // ==========================================
@@ -213,8 +211,6 @@ export const generateItinerary = async (input: PlannerInput): Promise<Itinerary>
     const masterRouteData = JSON.parse(cleanResponse(routeResponse));
     const masterRoute = masterRouteData.routePlan; // උදා: [{day: 1, location: "Colombo"}, {day: 2, location: "Kandy"}...]
 
-    console.log("✅ Master Route එක සාර්ථකයි! දින අනුව විස්තර ජනනය ආරම්භ කරයි...");
-
     // ==========================================
     // STEP 2: CHUNKED DETAILED GENERATION
     // ==========================================
@@ -245,8 +241,6 @@ export const generateItinerary = async (input: PlannerInput): Promise<Itinerary>
         const currentChunkDays = endDay - startDay + 1;
         const chunkMaxBudget = Math.floor((remainingBudget / remainingDays) * currentChunkDays);
         const chunkDailyBudget = Math.floor(chunkMaxBudget / currentChunkDays);
-
-        console.log(`⏳ AI Generate වෙමින් පවතී: Day ${startDay} සිට ${endDay} දක්වා... (Chunk Budget: $${chunkMaxBudget})`);
 
         const chunkLocations = masterRoute.filter((d: any) => d.day >= startDay && d.day <= endDay);
         const masterRouteString = chunkLocations.map((d: any) => `Day ${d.day}: ${d.location}`).join(", ");
@@ -391,7 +385,7 @@ export const generateItinerary = async (input: PlannerInput): Promise<Itinerary>
         } catch (parseError) {
             console.error(`🚨 JSON Parsing Failed at Chunk (Days ${startDay}-${endDay})! Raw String Length:`, jsonStr.length);
             console.error("Raw String Snippet (Last 200 chars):", jsonStr.slice(-200));
-            throw new Error(`AI එක දින ${startDay}-${endDay} ජනනය කිරීමේදී දෝෂයක් ඇතිවිය. කරුණාකර නැවත උත්සාහ කරන්න.`);
+            throw new Error(`Failed to generate AI data for days ${startDay} through ${endDay}. Please try again.`);
         }
 
         // --- Data Accumulation (ලැබුණු දවස් ටික එකතු කිරීම) ---
@@ -439,7 +433,7 @@ export const generateItinerary = async (input: PlannerInput): Promise<Itinerary>
 
     if (calculatedTotal > input.budget) {
         finalItinerary.isBudgetSufficient = false;
-        finalItinerary.budgetWarningMessage = `ඔබ ලබාදුන් අයවැය ($${input.budget}) මෙම ගමනට ප්‍රමාණවත් නොවේ. ඇස්තමේන්තුගත සම්පූර්ණ වියදම $${calculatedTotal} කි. කරුණාකර දින ගණන, හෝටල් හෝ වාහන වර්ගය වෙනස් කර නැවත උත්සාහ කරන්න.`;
+        finalItinerary.budgetWarningMessage = `Your budget of$${input.budget} is below the estimated cost of $${calculatedTotal}. Try adjusting your trip duration or preferences.`;
     }
     
     return finalItinerary as Itinerary;
@@ -506,6 +500,6 @@ export const regenerateSingleDay = async (
         console.error("🚨 JSON Parsing Failed! Raw String Length:", jsonStr.length);
         console.error("Raw String Snippet (Last 200 chars):", jsonStr.slice(-200));
         
-        throw new Error("AI එක සම්පූර්ණ නොවුණු පිළිතුරක් ලබා දුන්නා. කරුණාකර දවස් ගාණ අඩු කර නැවත උත්සාහ කරන්න.");
+        throw new Error("The AI provided an incomplete response. Please try reducing the number of days and try again.");
     }
 };

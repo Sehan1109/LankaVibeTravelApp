@@ -458,23 +458,32 @@ const PlannerForm: React.FC<PlannerFormProps> = ({
           {currentStep === 4 && renderStep4()}
         </div>
 
-        <div className="flex items-center justify-between pt-6 mt-2 border-t border-gray-50">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between pt-6 mt-2 border-t border-gray-50 gap-3 sm:gap-0">
+          
           {currentStep > 1 ? (
-            <button onClick={handlePrev} className="px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-100 flex items-center gap-2 transition-colors">
+            <button 
+              onClick={handlePrev} 
+              className="w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-100 flex items-center justify-center gap-2 transition-colors"
+            >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
-          ) : <div></div>}
+          ) : (
+            // Mobile වලදී මේ හිස් div එක අයින් කරලා Desktop වලදී විතරක් තියාගන්නවා (spacing හරි යන්න)
+            <div className="hidden sm:block"></div> 
+          )}
 
-          {/* Changed Button Logic for 4 Steps */}
           {currentStep < 4 ? (
-            <button onClick={handleNext} className="px-8 py-3 rounded-xl font-bold bg-gray-900 text-white hover:bg-black flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95">
+            <button 
+              onClick={handleNext} 
+              className="w-full sm:w-auto px-8 py-3 rounded-xl font-bold bg-gray-900 text-white hover:bg-black flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95"
+            >
               Next Step <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               onClick={handleGenerateClick}
               disabled={loading}
-              className="px-8 py-3 rounded-xl font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-2 shadow-lg shadow-emerald-200 hover:shadow-xl transition-all active:scale-95 disabled:opacity-70 disabled:pointer-events-none"
+              className="w-full sm:w-auto px-8 py-3 rounded-xl font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 hover:shadow-xl transition-all active:scale-95 disabled:opacity-70 disabled:pointer-events-none"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
               {itineraryExists ? "Regenerate Plan" : "Generate Itinerary"}

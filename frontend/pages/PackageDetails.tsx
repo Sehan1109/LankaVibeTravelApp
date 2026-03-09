@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { Loader2, FileDown, Hotel, BedDouble, Star, MapPin, Calendar } from 'lucide-react';
+import { useParams, Link } from 'react-router-dom'; // 🌟 Link එකතු කළා
+import { Loader2, FileDown, Hotel, BedDouble, Star, MapPin, Calendar, CheckCircle, XCircle, RefreshCw, LogIn } from 'lucide-react'; // 🌟 LogIn අයිකනය එකතු කළා
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas'; // Import html2canvas
+import html2canvas from 'html2canvas'; 
 import { useAuth } from '../hooks/useAuth';
 import ReviewSection from '../components/Review/ReviewSection';
 import ReviewList, { Review } from '../components/Review/ReviewList';
@@ -37,7 +37,7 @@ interface PackageData {
 const PackageDetails: React.FC = () => {
   const { id } = useParams();
   const { user } = useAuth();
-  const pdfRef = useRef<HTMLDivElement>(null); // Ref for the PDF content
+  const pdfRef = useRef<HTMLDivElement>(null); 
 
   // State
   const [pkg, setPkg] = useState<PackageData | null>(null);
@@ -45,6 +45,12 @@ const PackageDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Custom Toast State
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'loading' } | null>(null);
+  
+  // 🌟 Login වීමට පෙන්වන Popup එක සඳහා State එක
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   // Fetch Data
   useEffect(() => {
@@ -67,9 +73,19 @@ const PackageDetails: React.FC = () => {
     fetchData();
   }, [id]);
 
+  const showToast = (message: string, type: 'success' | 'error' | 'loading' = 'success') => {
+    setToast({ message, type });
+    if (type !== 'loading') {
+        setTimeout(() => {
+            setToast(null);
+        }, 3000); 
+    }
+  };
+
   const handleReviewButtonClick = () => {
     if (!user) {
-      alert("Please login to write a review");
+      // 🌟 Login වී නොමැති නම් අලුත් Login Prompt Popup එක පෙන්වන්න
+      setShowLoginPrompt(true);
       return;
     }
     setIsReviewModalOpen(true);
@@ -81,11 +97,13 @@ const PackageDetails: React.FC = () => {
 
   // --- NEW PDF DOWNLOAD LOGIC ---
   const handleDownload = async () => {
-    if (!pkg) return;
+    if (!pkg) return;
     setIsGeneratingPdf(true);
+    
+    showToast("Generating PDF Itinerary...", "loading");
 
-    try {
-      if (pkg.manualUrl) {
+    try {
+      if (pkg.manualUrl) {
         try {
           const response = await fetch(pkg.manualUrl);
           const blob = await response.blob();
@@ -97,7 +115,6 @@ const PackageDetails: React.FC = () => {
           document.body.appendChild(link);
           link.click();
           
-          // Cleanup
           document.body.removeChild(link);
           window.URL.revokeObjectURL(url);
         } catch (downloadError) {
@@ -110,62 +127,106 @@ const PackageDetails: React.FC = () => {
           link.click();
           document.body.removeChild(link);
         }
-      } 
+      } 
       else {
-        const input = pdfRef.current;
-        if (input) {
-          const canvas = await html2canvas(input, {
-            scale: 2, 
-            useCORS: true,
-            logging: false,
+        const input = pdfRef.current;
+        if (input) {
+          const canvas = await html2canvas(input, {
+            scale: 2, 
+            useCORS: true,
+            logging: false,
             scrollY: -window.scrollY,
-          });
+          });
 
-          const imgData = canvas.toDataURL('image/png');
-          const pdf = new jsPDF('p', 'mm', 'a4');
-          
-          const pdfWidth = 210;
-          const pdfHeight = 297;
-          const margin = 10;
-          const contentWidth = pdfWidth - (margin * 2);
-          const contentHeight = (canvas.height * contentWidth) / canvas.width;
-          
-          const xOffset = margin;
-          let yOffset = margin;
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          
+          const pdfWidth = 210;
+          const pdfHeight = 297;
+          const margin = 10;
+          const contentWidth = pdfWidth - (margin * 2);
+          const contentHeight = (canvas.height * contentWidth) / canvas.width;
+          
+          const xOffset = margin;
+          let yOffset = margin;
 
-          // First Page
-          pdf.addImage(imgData, 'PNG', xOffset, yOffset, contentWidth, contentHeight);
+          pdf.addImage(imgData, 'PNG', xOffset, yOffset, contentWidth, contentHeight);
 
-          // Multi-page logic
-          let heightLeft = contentHeight - (pdfHeight - (margin * 2));
-          let pageCount = 1;
+          let heightLeft = contentHeight - (pdfHeight - (margin * 2));
+          let pageCount = 1;
 
-          while (heightLeft > 0) {
-            pdf.addPage();
-            pageCount++;
-            // Calculate position for next page
-            const position = margin - (pdfHeight * (pageCount - 1)) + (margin * (pageCount - 1)); 
-            pdf.addImage(imgData, 'PNG', xOffset, position, contentWidth, contentHeight);
-            heightLeft -= (pdfHeight - (margin * 2));
-          }
+          while (heightLeft > 0) {
+            pdf.addPage();
+            pageCount++;
+            const position = margin - (pdfHeight * (pageCount - 1)) + (margin * (pageCount - 1)); 
+            pdf.addImage(imgData, 'PNG', xOffset, position, contentWidth, contentHeight);
+            heightLeft -= (pdfHeight - (margin * 2));
+          }
 
-          pdf.save(`${pkg.title.replace(/\s+/g, '_')}_Itinerary.pdf`);
-        }
+          pdf.save(`${pkg.title.replace(/\s+/g, '_')}_Itinerary.pdf`);
+        }
       }
+      
+      showToast("PDF Downloaded Successfully!", "success");
 
-    } catch (err) {
-      console.error("Failed to process download", err);
-      alert("Could not download. Please try again.");
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
+    } catch (err) {
+      console.error("Failed to process download", err);
+      showToast("Could not download. Please try again.", "error");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 text-emerald-600 animate-spin" /></div>;
   if (!pkg) return <div>Package not found</div>;
 
   return (
-    <div className="bg-white min-h-screen pb-20 font-poppins text-slate-800">
+    <div className="bg-white min-h-screen pb-20 font-poppins text-slate-800 relative">
+
+      {/* --- Custom Toast Notification UI --- */}
+      {toast && (
+          <div className="fixed top-24 right-6 z-[100] animate-fade-in-up">
+              <div className={`flex items-center gap-3 px-6 py-4 bg-white rounded-xl shadow-2xl font-medium border ${
+                  toast.type === 'success' ? 'text-emerald-600 border-emerald-500' : 
+                  toast.type === 'error' ? 'text-red-600 border-red-500' :
+                  'text-blue-600 border-blue-500'
+              }`}>
+                  {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-500" />}
+                  {toast.type === 'error' && <XCircle className="w-5 h-5 text-red-500" />}
+                  {toast.type === 'loading' && <RefreshCw className="w-5 h-5 text-blue-500 animate-spin" />}
+                  {toast.message}
+              </div>
+          </div>
+      )}
+
+      {/* 🌟 --- Login Required Prompt Modal --- 🌟 */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 transform transition-all scale-100 text-center border border-slate-100">
+                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-white shadow-sm">
+                    <LogIn className="w-10 h-10 text-emerald-500 ml-1" />
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 mb-2">Login Required</h3>
+                <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                    You need to be logged in to share your experience and write a review. Please sign in to continue.
+                </p>
+                <div className="flex flex-col gap-3">
+                    <Link 
+                        to="/login" 
+                        className="w-full py-3.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2"
+                    >
+                        Go to Login Page
+                    </Link>
+                    <button 
+                        onClick={() => setShowLoginPrompt(false)} 
+                        className="w-full py-3.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                        Maybe Later
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* Hero Section */}
       <div className="relative h-[50vh] sm:h-[60vh] w-full overflow-hidden">
@@ -292,8 +353,6 @@ const PackageDetails: React.FC = () => {
         <div className="mb-8 border-b-2 border-emerald-500 pb-6">
           <div className="flex justify-between items-start">
             <h1 className="text-4xl font-black text-emerald-800 mb-2 max-w-[70%]">{pkg.title}</h1>
-            {/* Added a logo placeholder or company name if needed */}
-            
           </div>
           
           <div className="flex items-center gap-6 text-slate-600 font-medium mt-2">
@@ -309,10 +368,9 @@ const PackageDetails: React.FC = () => {
               page-break-inside: avoid !important;
               break-inside: avoid !important;
               -webkit-column-break-inside: avoid !important;
-              display: block; /* Flex භාවිතා කරන විට සමහර විට අවුල් විය හැක, ඒ නිසා block දමමු */
+              display: block; 
             }
           }
-          /* html2canvas සඳහා print media query එකෙන් පිටතත් මෙය අවශ්‍ය විය හැක */
           .pdf-page-break-avoid {
               page-break-inside: avoid !important;
               break-inside: avoid !important;

@@ -5,6 +5,7 @@ const DaySchema = new mongoose.Schema({
     day: { type: Number, required: true },
 
     // Updated to match your frontend 'destination' field
+    title: { type: String },
     destination: { type: String },
     description: { type: String },
 

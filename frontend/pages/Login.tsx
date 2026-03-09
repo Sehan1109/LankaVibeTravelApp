@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom'; // 🌟 useLocation එකතු කළා
 import { useAuth } from '../hooks/useAuth';
 import { Lock, Mail, Loader2, ArrowRight, User, Eye, EyeOff } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
@@ -13,6 +13,27 @@ const Login: React.FC = () => {
   
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // 🌟 මෙතනට location එක ගත්තා
+
+  // 🌟 Navigation ලොජික් එක වෙන් කර ගත්තා (තැන් දෙකේම පාවිච්චි කරන්න ලේසි වෙන්න)
+  const handleSuccessfulLogin = (userData: any) => {
+      login(userData);
+      
+      const role = userData.user?.role || userData.role; // Backend response එක අනුව role එක ගැනීම
+
+      if (role === 'admin') {
+          navigate('/admin'); // Admin කෙනෙක් නම් Admin Panel එකට යවන්න
+      } else {
+          // Protected route එකකින් ආවා නම් ඒ අදාළ පිටුවට යවන්න (location.state.from)
+          // එහෙම නැත්නම් කෙලින්ම කලින් හිටපු පිටුවට යවන්න (navigate(-1))
+          const from = location.state?.from?.pathname || location.state?.from;
+          if (from) {
+              navigate(from, { replace: true });
+          } else {
+              navigate(-1); // 🌟 මේකෙන් කෙලින්ම browser එකේ Back button එක එබුවා වගේ කලින් පිටුවට යනවා
+          }
+      }
+  };
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
         setLoading(true);
@@ -26,8 +47,9 @@ const Login: React.FC = () => {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
 
-            login(data);
-            navigate('/planner'); // Or admin based on role
+            // 🌟 අලුත් Navigation එක Call කිරීම
+            handleSuccessfulLogin(data);
+            
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -53,12 +75,8 @@ const Login: React.FC = () => {
       if (!res.ok) throw new Error(data.error || 'Authentication failed');
 
       if (isLogin) {
-        login(data);
-        if (data.user.role === 'admin') {
-          navigate('/admin');
-        } else {
-          navigate('/planner');
-        }
+        // 🌟 අලුත් Navigation එක Call කිරීම
+        handleSuccessfulLogin(data);
       } else {
         alert('Account created successfully! Please log in.');
         setIsLogin(true);
@@ -132,7 +150,6 @@ const Login: React.FC = () => {
                 type={showPassword ? "text" : "password"}
                 value={formData.password}
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
-                // Added [&::-ms-reveal]:hidden and [&::-ms-clear]:hidden to hide browser default icons
                 className="w-full pl-10 pr-12 py-2.5 sm:py-3 rounded-xl border border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all text-sm sm:text-base [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
                 placeholder="••••••••"
                 required
@@ -164,6 +181,7 @@ const Login: React.FC = () => {
                 </>
             )}
           </button>
+          
           {/* Add Google Button */}
             <div className="mt-6">
                 <div className="relative mb-4">
@@ -178,7 +196,7 @@ const Login: React.FC = () => {
                      <GoogleLogin
                         onSuccess={handleGoogleSuccess}
                         onError={() => setError('Google Login Failed')}
-                        width="300" // Adjust width as needed
+                        width="300" 
                      />
                 </div>
             </div>

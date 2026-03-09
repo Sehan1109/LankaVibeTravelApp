@@ -1,4 +1,6 @@
 import express from 'express';
+import multer from 'multer';
+
 import {
     createPackage,
     getPackages,
@@ -9,10 +11,15 @@ import {
 
 const router = express.Router();
 
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
+const anyUpload = upload.any();
+
 router.get('/', getPackages);
 router.get('/:id', getPackageById);
-router.post('/', createPackage);
-router.put('/:id', updatePackage);
+router.post('/', anyUpload, createPackage);
+router.put('/:id', anyUpload, updatePackage);
 router.delete('/:id', deletePackage);
 
 export default router;

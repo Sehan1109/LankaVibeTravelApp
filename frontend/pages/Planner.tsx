@@ -77,7 +77,7 @@ const Planner: React.FC = () => {
                 status: 'draft',
                 lastCompletedStep: currentStep // This tells the admin panel what step they just finished!
             });
-            console.log(`Step ${currentStep} saved to backend with Session ID: ${currentSessionId}`);
+            
         } catch (err) {
             console.error("Failed to sync progress:", err);
         }

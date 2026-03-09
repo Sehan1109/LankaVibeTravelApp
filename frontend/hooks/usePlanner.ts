@@ -61,8 +61,6 @@ export const usePlanner = () => {
   // --- 3. HELPER: Fetch Real Prices (Hybrid Approach) ---
   
   const enrichItineraryWithRealPrices = async (aiItinerary: Itinerary, input: PlannerInput): Promise<Itinerary> => {
-    console.log("🔍 Attempting to fetch real prices...");
-    
     try {
         // Call the backend endpoint that handles SerpApi logic
         const response = await fetch(`${API_BASE_URL}/plans/refresh-prices`, {

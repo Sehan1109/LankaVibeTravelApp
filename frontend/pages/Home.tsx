@@ -343,9 +343,9 @@ const Home: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
               {packages.slice(0, 3).map((pkg, index) => (
-                <div key={pkg._id}>
+                <div key={pkg._id} className="h-full flex flex-col">
                   <FadeIn delay={index * 0.1}>
                     <PackageCard
                       pkg={pkg}

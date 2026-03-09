@@ -53,10 +53,17 @@ const uploadToSupabase = async (file, folder = 'packages') => {
 // @access  Public (Protected in production)
 export const createPackage = async (req, res) => {
     try {
-        const data = JSON.parse(req.body.data);
-        const files = req.files; // Multer array
+        // 1. Data ඇවිත් නැත්නම් Error එකක් යැවීම (Server crash වීම වැලැක්වීමට)
+        if (!req.body || !req.body.data) {
+            return res.status(400).json({ error: "Package data is missing!" });
+        }
 
-        if (!files || files.length === 0) {
+        const data = JSON.parse(req.body.data);
+
+        // 2. Files මුකුත් ආවේ නැත්නම් 'undefined' වීම වැලැක්වීමට හිස් array එකක් ([]) ලබා දීම
+        const files = req.files || [];
+
+        if (files.length === 0) {
             console.log("No files uploaded, proceeding with text data only.");
         }
 
@@ -89,6 +96,7 @@ export const createPackage = async (req, res) => {
                     const index = parseInt(match[1]);
                     const url = await uploadToSupabase(file, 'itinerary');
 
+                    // අදාල දවසට (index) අදාල itinerary එක තිබේදැයි පරීක්ෂා කර image url එක දැමීම
                     if (data.itinerary && data.itinerary[index]) {
                         data.itinerary[index].image = url;
                     }
