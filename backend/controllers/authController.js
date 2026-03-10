@@ -94,7 +94,7 @@ export const forgotPassword = async (req, res) => {
 
         // Send Email using Resend
         const { data, error } = await resend.emails.send({
-            from: 'onboarding@resend.dev', // Resend හි නොමිලේ දෙන email එක (Domain එක verify කරනකන් මෙය භාවිතා කරන්න)
+            from: 'LankaVibe Support <no-reply@lankavibe.app>',
             to: user.email,
             subject: 'LankaVibe - Password Reset Request',
             html: `<p>You are receiving this because you (or someone else) have requested the reset of the password for your account.</p>
