@@ -1,12 +1,7 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-export const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.user,
-        pass: process.env.pass
-    }
-});
+// Resend API Key එක හරහා සම්බන්ධ වීම
+export const resend = new Resend(process.env.RESEND_API_KEY);

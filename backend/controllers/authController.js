@@ -2,7 +2,7 @@ import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { transporter } from '../config/email.js';
+import { resend } from '../config/email.js';
 import { OAuth2Client } from 'google-auth-library';
 
 // In production, use process.env.JWT_SECRET
@@ -89,25 +89,30 @@ export const forgotPassword = async (req, res) => {
         user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
         await user.save();
 
-        // Create Reset Link (Assumes frontend runs on localhost:3000)
+        // Create Reset Link
         const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
-        const mailOptions = {
+        // Send Email using Resend
+        const { data, error } = await resend.emails.send({
+            from: 'onboarding@resend.dev', // Resend හි නොමිලේ දෙන email එක (Domain එක verify කරනකන් මෙය භාවිතා කරන්න)
             to: user.email,
-            from: 'LankaVibe Support <no-reply@lankavibe.com>',
-            subject: 'Password Reset Request',
-            text: `You are receiving this because you (or someone else) have requested the reset of the password for your account.\n\n` +
-                `Please click on the following link, or paste this into your browser to complete the process:\n\n` +
-                `${resetUrl}\n\n` +
-                `If you did not request this, please ignore this email and your password will remain unchanged.\n`
-        };
+            subject: 'LankaVibe - Password Reset Request',
+            html: `<p>You are receiving this because you (or someone else) have requested the reset of the password for your account.</p>
+                   <p>Please click on the following link, or paste this into your browser to complete the process:</p>
+                   <a href="${resetUrl}">${resetUrl}</a>
+                   <p>If you did not request this, please ignore this email and your password will remain unchanged.</p>`
+        });
 
-        await transporter.sendMail(mailOptions);
+        if (error) {
+            console.error('Resend API Error:', error);
+            return res.status(500).json({ error: 'Failed to send reset email' });
+        }
+
         res.json({ message: 'Reset link sent to email' });
 
     } catch (error) {
         console.error('Forgot Password Error:', error);
-        res.status(500).json({ error: 'Error sending email' });
+        res.status(500).json({ error: 'Server error while sending email' });
     }
 };
 
