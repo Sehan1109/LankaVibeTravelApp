@@ -109,14 +109,7 @@ const Admin: React.FC = () => {
             {isSidebarOpen && <span className="truncate">Settings</span>}
           </div>
         </nav>
-
-        <div className="p-4 border-t border-emerald-100 shrink-0">
-           <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 transition-colors ${!isSidebarOpen && 'justify-center'}`}>
-             <LogOut className="w-5 h-5 min-w-[20px]" />
-             {isSidebarOpen && <span className="font-medium text-sm truncate">Sign Out</span>}
-           </button>
-        </div>
-      </aside>
+        </aside>
 
       {/* --- MAIN CONTENT --- */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
